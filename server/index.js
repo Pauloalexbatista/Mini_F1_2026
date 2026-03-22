@@ -147,7 +147,7 @@ app.post('/api/tracks', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { id, name, svg_data, pit_svg_data } = req.body;
     await db.run(
-      'INSERT INTO tracks (id, name, svg_data, pit_svg_data, created_by) VALUES (?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO tracks (id, name, svg_data, pit_svg_data, created_by) VALUES (?, ?, ?, ?, ?)',
       [id, name, svg_data, pit_svg_data, req.user.id]
     );
     res.status(201).json({ message: 'Track created successfully' });

@@ -131,7 +131,7 @@ export default function App() {
   const handleTestTrack = async (customTrack: TrackDef) => {
     try {
        const token = localStorage.getItem('token');
-       await fetch('/api/tracks', {
+       const res = await fetch('/api/tracks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ 
@@ -141,6 +141,11 @@ export default function App() {
               pit_svg_data: customTrack.pit_svg_data || '' 
           })
        });
+
+       if (!res.ok) {
+           const errData = await res.json().catch(() => ({}));
+           throw new Error(errData.error || `HTTP Error ${res.status}`);
+       }
        
        const existingIndex = dbTracks.findIndex(t => t.id === customTrack.id);
        if (existingIndex >= 0) {
