@@ -5,8 +5,12 @@ WORKDIR /app
 # Copy dependency files first to maximize Docker layer caching
 COPY package.json package-lock.json* ./
 
-# Explicitly install all dependencies (including devDependencies required for vite build)
-RUN npm ci
+# Install Python and Build Tools required for node-gyp native compilation
+RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
+
+# Explicitly install all dependencies and FORCE SQLite to compile from C++ source code!
+# This completely bypasses the pre-built GLIBC 2.38 binary mismatch error.
+RUN npm install --build-from-source=sqlite3
 
 # Copy the rest of the engine logic and frontend assets
 COPY . .
