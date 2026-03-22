@@ -1,0 +1,14 @@
+@import url('https://fonts.googleapis.com/css2?family=Titillium+Web:wght@400;600;700;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-f1: "Titillium Web", sans-serif;
+  --color-f1-red: #E10600;
+  --color-f1-black: #15151e;
+}
+
+body {
+  background-color: #15151e;
+  color: #FFFFFF;
+  font-family: var(--font-f1);
+}
