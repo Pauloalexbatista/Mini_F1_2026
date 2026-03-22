@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PlayerConfig, CarSetupType, SETUP_CONFIGS } from '../types';
-import { TRACKS, computeSpline, getTrackTelemetry } from '../tracks';
+import { TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { audio } from '../audio';
 import { updateCarPhysics, CarPhysics } from '../physics';
 import { drawTrack, drawEnvironments, drawF1Car } from '../renderer';
 
 interface GameProps {
   players: PlayerConfig[];
-  trackId: string;
+  track: TrackDef;
   totalLaps: number;
   onBackToMenu: () => void;
 }
@@ -21,7 +21,7 @@ const SETUP_CARDS = [
 let GAME_WIDTH = 1280;
 let GAME_HEIGHT = 720;
 
-export default function Game({ players, trackId, totalLaps, onBackToMenu }: GameProps) {
+export default function Game({ players, track, totalLaps, onBackToMenu }: GameProps) {
   const [isSetupPhase, setIsSetupPhase] = useState(true);
   const [playerSetups, setPlayerSetups] = useState<Record<number, CarSetupType>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -39,7 +39,7 @@ export default function Game({ players, trackId, totalLaps, onBackToMenu }: Game
   const cameraRef = useRef<{x: number, y: number, scale: number} | null>(null);
   const skidMarksRef = useRef<{x: number, y: number, a: number, w: number}[]>([]);
   
-  const rawTrack = TRACKS.find(t => t.id === trackId) || TRACKS[0];
+  const rawTrack = track;
   const spline = React.useMemo(() => rawTrack.nodes, [rawTrack]);
 
   // Init cars
@@ -169,7 +169,7 @@ export default function Game({ players, trackId, totalLaps, onBackToMenu }: Game
               'Authorization': `Bearer ${token}`
            },
            body: JSON.stringify({
-              track_id: trackId,
+              track_id: track.id,
               lap_time_ms: timeMs
            })
         });

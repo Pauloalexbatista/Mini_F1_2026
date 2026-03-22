@@ -33,7 +33,7 @@ const DEFAULT_CONTROLS = [
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [dbTracks, setDbTracks] = useState<TrackDef[]>(TRACKS);
+  const [dbTracks, setDbTracks] = useState<TrackDef[]>([]);
   
   const [appState, setAppState] = useState<'menu' | 'playing' | 'builder'>('menu');
 
@@ -93,7 +93,7 @@ export default function App() {
     checkAuth();
   }, []);
   const [playerCount, setPlayerCount] = useState(1);
-  const [selectedTrack, setSelectedTrack] = useState(TRACKS[0].id);
+  const [selectedTrack, setSelectedTrack] = useState('');
   const [totalLaps, setTotalLaps] = useState(3);
   const [selectedSetup, setSelectedSetup] = useState<CarSetupType>('BALANCED');
   
@@ -286,7 +286,7 @@ export default function App() {
       {appState === 'playing' && (
         <Game 
           players={activePlayers} 
-          trackId={selectedTrack}
+          track={dbTracks.find(t => t.id === selectedTrack)!}
           totalLaps={totalLaps}
           onBackToMenu={handleBackToMenu} 
         />
