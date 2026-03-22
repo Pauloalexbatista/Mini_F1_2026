@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = 3001; // Force Coolify to align with the EXPOSE instruction
+const PORT = process.env.PORT || 3000; // Match Coolify default Node route
 const JWT_SECRET = process.env.JWT_SECRET || 'f1_2026_super_secret_key_omega';
 
 app.use(cors());

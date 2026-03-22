@@ -7,7 +7,7 @@
     "node": "20.x"
   },
   "scripts": {
-    "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev": "vite --port=5173 --host=0.0.0.0",
     "server": "npx tsx watch server/index.js",
     "build": "vite build",
     "start": "node server/index.js",
