@@ -23,7 +23,7 @@ export function Auth({ onLogin }: AuthProps) {
       : { username, password, pilot_name: pilotName };
 
     try {
-      const res = await fetch(`http://localhost:3001${endpoint}`, {
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

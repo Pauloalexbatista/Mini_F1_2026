@@ -45,7 +45,7 @@ export default function App() {
         return;
       }
       try {
-        const res = await fetch('http://localhost:3001/api/me', {
+        const res = await fetch('/api/me', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         if (res.ok) {
@@ -53,18 +53,18 @@ export default function App() {
           setUser(userData);
           
           try {
-             const trackRes = await fetch('http://localhost:3001/api/tracks');
+             const trackRes = await fetch('/api/tracks');
              let trackData = await trackRes.json();
              
              if (trackData.length === 0 && userData.role === 'admin') {
                 for (const t of TRACKS) {
-                  await fetch('http://localhost:3001/api/tracks', {
+                  await fetch('/api/tracks', {
                      method: 'POST',
                      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
                      body: JSON.stringify({ id: t.id, name: t.name, svg_data: t.svg_data || '', pit_svg_data: t.pit_svg_data || '' })
                   });
                 }
-                const trackRes2 = await fetch('http://localhost:3001/api/tracks');
+                const trackRes2 = await fetch('/api/tracks');
                 trackData = await trackRes2.json();
              }
              
@@ -131,7 +131,7 @@ export default function App() {
   const handleTestTrack = async (customTrack: TrackDef) => {
     try {
        const token = localStorage.getItem('token');
-       await fetch('http://localhost:3001/api/tracks', {
+       await fetch('/api/tracks', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ 
@@ -161,7 +161,7 @@ export default function App() {
   const handleDeleteTrack = async (id: string) => {
       try {
          const token = localStorage.getItem('token');
-         const res = await fetch(`http://localhost:3001/api/tracks/${id}`, {
+         const res = await fetch(`/api/tracks/${id}`, {
             method: 'DELETE',
             headers: { Authorization: `Bearer ${token}` }
          });
