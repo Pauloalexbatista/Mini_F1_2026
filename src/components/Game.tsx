@@ -155,6 +155,29 @@ export default function Game({ players, trackId, totalLaps, onBackToMenu }: Game
     return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${milli.toString().padStart(2,'0')}`;
   };
 
+  const submitLapTime = async (timeMs: number) => {
+     try {
+        const token = localStorage.getItem('token');
+        if (!token) return; // Guests don't get leaderboard entries
+        
+        // Em produção vamos apontar dinamicamente para onde estamos alojados.
+        // Como o site será minif12026.online, a API relativa ao mesmo site é "/api/lap-times"
+        await fetch(`/api/lap-times`, {
+           method: 'POST',
+           headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+           },
+           body: JSON.stringify({
+              track_id: trackId,
+              lap_time_ms: timeMs
+           })
+        });
+     } catch (e) {
+        console.error("Error submitting lap time", e);
+     }
+  };
+
   // Game Loop
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -557,7 +580,13 @@ export default function Game({ players, trackId, totalLaps, onBackToMenu }: Game
              car.laps++;
              car.currentWaypoint = 0; // reset
              if (car.laps >= totalLaps && totalLaps > 0) {
-               car.finishTime = now - startTimeRef.current;
+               if (car.finishTime === null || car.finishTime === undefined) {
+                   car.finishTime = now - startTimeRef.current;
+                   if (!car.isBot && !car.scorePosted) {
+                       car.scorePosted = true;
+                       submitLapTime(car.finishTime);
+                   }
+               }
              }
           }
         });

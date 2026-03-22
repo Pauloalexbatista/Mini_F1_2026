@@ -34,6 +34,7 @@ export interface CarPhysics {
   controls?: { up: string, down: string, left: string, right: string };
   setupProfile?: CarSetupStats;
   isSkidding?: boolean;
+  scorePosted?: boolean;
 }
 
 export type SurfaceType = 'TRACK' | 'CURB' | 'CURB_WIDE' | 'CURB_APEX' | 'GRASS';

@@ -274,6 +274,7 @@ export default function App() {
           onOpenProfile={() => setAppState('profile')}
           onUpdatePlayer={handleUpdatePlayer} 
           onDeleteTrack={handleDeleteTrack} // New Prop
+          user={user} // Pass user role for conditional UI
         />
       )}
       {appState === 'playing' && (

@@ -110,9 +110,10 @@ interface MenuProps {
   onOpenProfile: () => void;
   onUpdatePlayer: (index: number, config: PlayerConfig) => void;
   onDeleteTrack?: (id: string) => void;
+  user?: any;
 }
 
-export default function Menu({ players, playerCount, setPlayerCount, selectedTrack, setSelectedTrack, totalLaps, setTotalLaps, onStart, onOpenBuilder, onOpenProfile, onUpdatePlayer, onDeleteTrack }: MenuProps) {
+export default function Menu({ players, playerCount, setPlayerCount, selectedTrack, setSelectedTrack, totalLaps, setTotalLaps, onStart, onOpenBuilder, onOpenProfile, onUpdatePlayer, onDeleteTrack, user }: MenuProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'teams' | 'tracks'>('overview');
   const [activeKeyConfig, setActiveKeyConfig] = useState<{ playerIndex: number, action: keyof PlayerConfig['controls'] } | null>(null);
   
@@ -233,13 +234,15 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                    <div className="p-4 bg-black/40 rounded-lg border border-gray-800 flex flex-col min-h-[160px]">
                       <div className="flex justify-between items-end mb-4">
                          <label className="text-xs text-gray-500 font-bold uppercase tracking-widest">Calendário de Pistas</label>
-                         <button 
-                           onClick={() => setActiveTab('tracks')}
-                           className="text-[10px] text-[#E10600] font-bold uppercase tracking-widest hover:underline flex items-center gap-1"
-                         >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                            Adicionar Circuito
-                         </button>
+                         {user?.role === 'admin' && (
+                             <button 
+                               onClick={() => setActiveTab('tracks')}
+                               className="text-[10px] text-[#E10600] font-bold uppercase tracking-widest hover:underline flex items-center gap-1"
+                             >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                                Adicionar Circuito
+                             </button>
+                         )}
                       </div>
 
                       <div className="flex-1 space-y-3">
@@ -409,13 +412,15 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
            <div className="animate-in fade-in duration-500">
              <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end border-b border-gray-800 pb-4 gap-4">
                 <h2 className="text-3xl font-black text-white uppercase tracking-tighter">SELECT YOUR TRACK</h2>
-                <button 
-                  onClick={onOpenBuilder}
-                  className="bg-[#E10600] text-white font-black uppercase tracking-widest text-[11px] px-6 py-3 rounded hover:bg-white hover:text-[#E10600] transition-colors flex items-center gap-2 shadow-[0_0_15px_rgba(225,6,0,0.5)]"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                  NOVO CIRCUITO - TRACK BUILDER
-                </button>
+                {user?.role === 'admin' && (
+                    <button 
+                      onClick={onOpenBuilder}
+                      className="bg-[#E10600] text-white font-black uppercase tracking-widest text-[11px] px-6 py-3 rounded hover:bg-white hover:text-[#E10600] transition-colors flex items-center gap-2 shadow-[0_0_15px_rgba(225,6,0,0.5)]"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                      NOVO CIRCUITO - TRACK BUILDER
+                    </button>
+                )}
              </div>
              
              {TRACKS.length > 0 ? (
@@ -476,15 +481,17 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                <div className="flex flex-col items-center justify-center p-20 bg-[#15151e] rounded-2xl border border-gray-800">
                   <svg className="w-16 h-16 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172A4 4 0 015.5 14h-.5a2 2 0 01-2-2v-4a2 2 0 012-2h.5a4 4 0 013.672-2.172M16.172 9.172A4 4 0 0120 11h.5a2 2 0 012 2v4a2 2 0 01-2 2h-.5a4 4 0 01-3.672 2.172M9.172 16.172l6.828-6.828" /></svg>
                   <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-3">Sem Pistas Disponíveis</h3>
-                  <p className="text-gray-400 max-w-sm text-center mb-8 text-sm leading-relaxed">Nenhuma pista construída na base de dados local. Acede ao Laboratório Vetorial e desenha os teus próprios traçados.</p>
+                  <p className="text-gray-400 max-w-sm text-center mb-8 text-sm leading-relaxed">Nenhuma pista construída na base de dados global.</p>
                   
-                  <button 
-                    onClick={onOpenBuilder}
-                    className="bg-[#E10600] text-white font-black uppercase tracking-widest text-[13px] px-8 py-4 rounded hover:bg-white hover:text-[#E10600] transition-colors flex items-center gap-2 shadow-[0_0_15px_rgba(225,6,0,0.5)]"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                    ABRIR TRACK BUILDER STUDIO
-                  </button>
+                  {user?.role === 'admin' && (
+                      <button 
+                        onClick={onOpenBuilder}
+                        className="bg-[#E10600] text-white font-black uppercase tracking-widest text-[13px] px-8 py-4 rounded hover:bg-white hover:text-[#E10600] transition-colors flex items-center gap-2 shadow-[0_0_15px_rgba(225,6,0,0.5)]"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                        ABRIR TRACK BUILDER STUDIO
+                      </button>
+                  )}
                </div>
              )}
              
