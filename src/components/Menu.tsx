@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PlayerConfig, CarSetupType } from '../types';
-import { TRACKS, TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
+import { TRACKS as DEFAULT_TRACKS, TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { drawTrack, drawF1Car } from '../renderer';
 import { TEAM_LIVERIES } from '../App';
 
@@ -111,17 +111,19 @@ interface MenuProps {
   onUpdatePlayer: (index: number, config: PlayerConfig) => void;
   onDeleteTrack?: (id: string) => void;
   user?: any;
+  tracks: TrackDef[];
 }
 
-export default function Menu({ players, playerCount, setPlayerCount, selectedTrack, setSelectedTrack, totalLaps, setTotalLaps, onStart, onOpenBuilder, onOpenProfile, onUpdatePlayer, onDeleteTrack, user }: MenuProps) {
+export default function Menu({ players, playerCount, setPlayerCount, selectedTrack, setSelectedTrack, totalLaps, setTotalLaps, onStart, onOpenBuilder, onOpenProfile, onUpdatePlayer, onDeleteTrack, user, tracks }: MenuProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'teams' | 'tracks'>('overview');
   const [activeKeyConfig, setActiveKeyConfig] = useState<{ playerIndex: number, action: keyof PlayerConfig['controls'] } | null>(null);
   
   const [readyPlayers, setReadyPlayers] = useState<Record<number, boolean>>({});
-  const tracksAreReady = TRACKS.length > 0;
+  const ALL_TRACKS = [...tracks, ...DEFAULT_TRACKS.filter(sysT => !tracks.some(dbT => dbT.id === sysT.id))];
+  const tracksAreReady = ALL_TRACKS.length > 0;
 
   // Helper guard
-  const activeTrackObj = TRACKS.find(t => t.id === selectedTrack) || TRACKS[0] || null;
+  const activeTrackObj = ALL_TRACKS.find(t => t.id === selectedTrack) || ALL_TRACKS[0] || null;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -204,7 +206,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
              
              <button 
                 onClick={onStart}
-                disabled={TRACKS.length === 0 || !players.filter(p => !p.isBot).every(p => readyPlayers[p.id])}
+                disabled={ALL_TRACKS.length === 0 || !players.filter(p => !p.isBot).every(p => readyPlayers[p.id])}
                 className={`text-white font-black text-[13px] tracking-widest pt-2 pb-1.5 px-6 rounded transition-colors flex items-center shadow-[0_0_15px_rgba(225,6,0,0.4)] h-[36px] ${tracksAreReady ? (players.filter(p => !p.isBot).every(p => readyPlayers[p.id]) ? 'bg-[#E10600] cursor-pointer hover:bg-white hover:text-[#E10600]' : 'bg-gray-800 opacity-50 cursor-not-allowed') : 'bg-gray-800 opacity-50 cursor-not-allowed'}`}
              >
                 {players.filter(p => !p.isBot).every(p => readyPlayers[p.id]) ? (
@@ -423,10 +425,11 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                 )}
              </div>
              
-             {TRACKS.length > 0 ? (
+             {ALL_TRACKS.length > 0 ? (
                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-8 w-full">
-                 {TRACKS.map((t, i) => {
+                 {ALL_TRACKS.map((t, i) => {
                     const isSelected = selectedTrack === t.id;
+                    const isSystemTrack = DEFAULT_TRACKS.some(sysT => sysT.id === t.id);
                     return (
                       <div 
                         key={t.id}
@@ -434,19 +437,21 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                         className={`cursor-pointer w-full flex flex-col h-full bg-[#15151e] rounded-2xl overflow-hidden transition-all duration-300 border-4 ${isSelected ? 'border-[#E10600] shadow-[0_15px_40px_rgba(225,6,0,0.4)] transform md:-translate-y-2 z-10 relative' : 'border-gray-800 opacity-95 hover:opacity-100 hover:border-gray-600 hover:-translate-y-1'}`}
                       >
                          <div className="p-6 border-b border-gray-800 bg-[#15151e] z-10 relative">
-                           {/* APAGAR PISTA */}
-                           <button
-                             onClick={(e) => { 
-                               e.stopPropagation(); 
-                               if(confirm(`Tem a certeza que quer apagar a pista '${t.name}'?`)) {
-                                   if (onDeleteTrack) onDeleteTrack(t.id);
-                               }
-                             }}
-                             className="absolute top-4 right-4 bg-black/50 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center backdrop-blur transition z-50"
-                             title={`Apagar ${t.name}`}
-                           >
-                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                           </button>
+                             {/* APAGAR PISTA (Só permite se não for sistema) */}
+                             {!isSystemTrack && (
+                               <button
+                                 onClick={(e) => { 
+                                   e.stopPropagation(); 
+                                   if(confirm(`Tem a certeza que quer apagar a pista '${t.name}'?`)) {
+                                       if (onDeleteTrack) onDeleteTrack(t.id);
+                                   }
+                                 }}
+                                 className="absolute top-4 right-4 bg-black/50 hover:bg-red-600 text-white w-8 h-8 rounded-full flex items-center justify-center backdrop-blur transition z-50"
+                                 title={`Apagar ${t.name}`}
+                               >
+                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                               </button>
+                             )}
 
                            <div className="flex justify-between items-center mb-3">
                              <span className="text-[11px] font-black text-white uppercase tracking-widest block bg-[#E10600] rounded px-2 py-0.5">ROUND {i+1}</span>

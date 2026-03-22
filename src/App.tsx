@@ -267,6 +267,7 @@ export default function App() {
     <div className={`w-full ${appState === 'menu' ? 'min-h-screen overflow-y-auto overflow-x-hidden' : 'h-screen overflow-hidden'} bg-[#15151e]`}>
       {appState === 'menu' && (
         <Menu 
+          tracks={dbTracks}
           players={uiPlayers} 
           playerCount={playerCount}
           setPlayerCount={setPlayerCount}
