@@ -164,7 +164,9 @@ export const TrackBuilder: React.FC<TrackBuilderProps> = ({ onExit, onTestTrack 
        id: trackId,
        name: trackName.toUpperCase(),
        nodes,
-       pitNodes
+       pitNodes,
+       svg_data: mainPath,
+       pit_svg_data: pitPath || undefined
     };
 
     if (onTestTrack) {

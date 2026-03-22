@@ -117,7 +117,7 @@ export default function App() {
   };
 
   const handleStartGame = () => {
-    if (TRACKS.length > 0) {
+    if (dbTracks.length > 0) {
         setAppState('playing');
     } else {
         alert("Paddock Vazio! Entre no Track Builder Studio e construa uma pista primeiro.");
@@ -128,28 +128,55 @@ export default function App() {
     setAppState('menu');
   };
 
-  const handleTestTrack = (customTrack: TrackDef) => {
-    // Inject Custom Track logic dynamically
-    const existingIndex = TRACKS.findIndex(t => t.id === customTrack.id);
-    if (existingIndex >= 0) {
-        TRACKS[existingIndex] = customTrack;
-    } else {
-        TRACKS.push(customTrack);
+  const handleTestTrack = async (customTrack: TrackDef) => {
+    try {
+       const token = localStorage.getItem('token');
+       await fetch('http://localhost:3001/api/tracks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ 
+              id: customTrack.id, 
+              name: customTrack.name, 
+              svg_data: customTrack.svg_data || '', 
+              pit_svg_data: customTrack.pit_svg_data || '' 
+          })
+       });
+       
+       const existingIndex = dbTracks.findIndex(t => t.id === customTrack.id);
+       if (existingIndex >= 0) {
+           const newDb = [...dbTracks];
+           newDb[existingIndex] = customTrack;
+           setDbTracks(newDb);
+       } else {
+           setDbTracks([...dbTracks, customTrack]);
+       }
+       setSelectedTrack(customTrack.id);
+       setAppState('menu');
+    } catch(e) {
+       console.error("Error saving track to cloud", e);
+       alert("Erro de Ligação ao Servidor F1 VPS.");
     }
-    setSelectedTrack(customTrack.id);
-    setAppState('menu');
   };
 
-  const [trackUpdateCount, setTrackUpdateCount] = useState(0);
-
-  const handleDeleteTrack = (id: string) => {
-      const idx = TRACKS.findIndex(t => t.id === id);
-      if (idx !== -1) {
-          TRACKS.splice(idx, 1);
-          setTrackUpdateCount(prev => prev + 1); // Trigger render update
-          if (selectedTrack === id) {
-              setSelectedTrack(TRACKS.length > 0 ? TRACKS[0].id : '');
-          }
+  const handleDeleteTrack = async (id: string) => {
+      try {
+         const token = localStorage.getItem('token');
+         const res = await fetch(`http://localhost:3001/api/tracks/${id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+         });
+         
+         if (res.ok) {
+             const newTracks = dbTracks.filter(t => t.id !== id);
+             setDbTracks(newTracks);
+             if (selectedTrack === id) {
+                 setSelectedTrack(newTracks.length > 0 ? newTracks[0].id : '');
+             }
+         } else {
+             alert("Erro: Apenas Pilotos com estatuto de ADMIN podem apagar pistas da Cloud.");
+         }
+      } catch(e) {
+         console.error("Error deleting track", e);
       }
   };
 
