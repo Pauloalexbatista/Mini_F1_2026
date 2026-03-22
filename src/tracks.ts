@@ -377,27 +377,4 @@ const MELBOURNE_PIT_SVG = "M 763,395 L 733,416 L 481,415 L 417,442";
 const OVAL_SVG = "M 300,150 L 350,150 L 650,150 L 700,150 L 780,180 L 830,240 L 850,300 L 830,360 L 780,420 L 700,450 L 650,450 L 350,450 L 300,450 L 220,420 L 170,360 L 150,300 L 170,240 L 220,180 Z";
 const OVAL_PIT_SVG = "M 830,360 L 750,400 L 700,400 L 300,400 L 250,400 L 170,360";
 
-export const TRACKS: TrackDef[] = [
-  {
-    id: 'oval_test',
-    name: 'OVAL TEST TRACK',
-    nodes: parseStudioToNodes(OVAL_SVG, 15.0, 250, true),
-    pitNodes: fuseAndComputePitLane(
-        parseStudioControlPoints(OVAL_SVG, 15.0, 250, true),
-        parseStudioControlPoints(OVAL_PIT_SVG, 15.0, 187.5, false)
-    ),
-    svg_data: OVAL_SVG,
-    pit_svg_data: OVAL_PIT_SVG
-  },
-  {
-    id: 'melbourne',
-    name: 'MELBOURNE (GRAND PRIX)',
-    nodes: parseStudioToNodes(MELBOURNE_SVG, 15.0, 250, true),
-    pitNodes: fuseAndComputePitLane(
-        parseStudioControlPoints(MELBOURNE_SVG, 15.0, 250, true),
-        parseStudioControlPoints(MELBOURNE_PIT_SVG, 15.0, 187.5, false)
-    ),
-    svg_data: MELBOURNE_SVG,
-    pit_svg_data: MELBOURNE_PIT_SVG
-  },
-];
+export const TRACKS: TrackDef[] = [];
