@@ -45,9 +45,9 @@ app.post('/api/register', async (req, res) => {
   try {
     const { username, password, pilot_name } = req.body;
     const password_hash = await bcrypt.hash(password, 10);
-    // First user is automatically admin, OR if the username contains 'admin' (Emergency Recovery)
+    // First user is automatically admin
     const countRes = await db.get('SELECT COUNT(*) as count FROM users');
-    const role = (countRes.count === 0 || username.toLowerCase().includes('admin')) ? 'admin' : 'pilot';
+    const role = countRes.count === 0 ? 'admin' : 'pilot';
 
     const result = await db.run(
       'INSERT INTO users (username, password_hash, role, pilot_name) VALUES (?, ?, ?, ?)',
