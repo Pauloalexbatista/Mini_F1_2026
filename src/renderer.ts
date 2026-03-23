@@ -28,27 +28,40 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
 
   const asphaltColor = '#3f3f4e';
 
-  // 1. RELVA BASE INFINITA (Fundo verde orgânico - aclarado um nada para fazer o muro Preto realçar a sua espessura fina de 5px)
-  drawVariablePath(spline, 5.0, '#142E0F', [], true);
+  // 1. RELVA BASE INFINITA (Verde Organico Clássico F1)
+  drawVariablePath(spline, 5.0, '#315722', [], true);
 
-  // 1.5 O MURO EXTERIOR, A RELVA E AS ZEBRAS (Tudo construído pelo limite Matemático Seguro Voronoi)
+  // 1.5 O MURO EXTERIOR, A RELVA E AS ZEBRAS (Tudo construído pelo limite Matemático Seguro)
   if (!squeezedWallCache.has(spline)) {
       const wallPath = new Path2D();
-      const grassPath = new Path2D();
+      const grassSafeClip = new Path2D();
       const zebraSafeClip = new Path2D();
-      
+
+      // GPU STENCIL BUFFER OPTIMIZER:
+      // Se a pista tiver 40.000 nós (Speedtests), desenhar 40 mil sub-paths de .arc() crashava o GPU, originando o Halftone Bug (Moiré) e quebra de Framerate.
+      // Saltamos nós que estejam demasiado próximos do último renderizado!
+      let lastRenderedNode = spline[0];
+
       for(let i=0; i<spline.length; i++) {
             const curr = spline[i];
-            const maxR = curr.maxWallRadius || (curr.width * 1.70); // 425 Px (Limite real F1)
+            
+            // Optimization Stride (120px saves 85% geometry while 340px circles cleanly overlap without visible gaps)
+            if (i > 0 && i < spline.length - 1) {
+                const distToLast = Math.sqrt((curr.x - lastRenderedNode.x)**2 + (curr.y - lastRenderedNode.y)**2);
+                if (distToLast < 120) continue; 
+            }
+            lastRenderedNode = curr;
+            
+            const maxR = curr.maxWallRadius || (curr.width * 1.70); // 425 Px Limit
             
             // 1) O Muro Contínuo! (Sempre presente, fecha o perímetro à distância maxR)
             wallPath.moveTo(curr.x + maxR, curr.y);
             wallPath.arc(curr.x, curr.y, maxR, 0, Math.PI * 2);
             
-            // 2) A Relva! (Recuada 5px para revelar a fita dura envolvente a toda a pista)
-            const gR = Math.max(0, maxR - 5);
-            grassPath.moveTo(curr.x + gR, curr.y);
-            grassPath.arc(curr.x, curr.y, gR, 0, Math.PI * 2);
+            // 2) A Relva Interna (Cresce do muro para dentro até 20px de distância do asfalto)
+            const grassZR = Math.max(0, maxR - 20);
+            grassSafeClip.moveTo(curr.x + grassZR, curr.y);
+            grassSafeClip.arc(curr.x, curr.y, grassZR, 0, Math.PI * 2);
 
             // 3) Túnel Seguro das Zebras (Corta a 14px do muro, se houver espaço)
             const safeZR = Math.max(0, maxR - 14);
@@ -56,7 +69,7 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
             zebraSafeClip.arc(curr.x, curr.y, safeZR, 0, Math.PI * 2);
       }
       squeezedWallCache.set(spline, wallPath);
-      squeezedGrassCache.set(spline, grassPath);
+      squeezedGrassCache.set(spline, grassSafeClip);
       zebraWhiteCache.set(spline, zebraSafeClip);
   }
   
@@ -64,14 +77,11 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
   ctx.fillStyle = '#111111'; // Betão negro impenetrável
   ctx.fill(squeezedWallCache.get(spline)!);
 
-  // Relva Interna do GP (Verde mais claro)
-  ctx.fillStyle = '#224A19';
+  // Relva Interna do GP (Verde mais claro natural)
+  ctx.fillStyle = '#3a692a';
   ctx.fill(squeezedGrassCache.get(spline)!);
 
-  // DEBUG NEON LIMITS: Muros Invisíveis Visíveis para Testes (Verde Neon)
-  ctx.strokeStyle = '#39FF14'; 
-  ctx.lineWidth = 10;
-  ctx.stroke(squeezedWallCache.get(spline)!);
+  // ZONA LIMPA DE NEON: Remoção definitiva do Debug de Limites para devolver o visual 100% fotorealista da Relva Clássica!
 
   // ==========================================
   // REGRA 2: PIT LANE COM MUROS E ZEBRAS (Relva = 0)
@@ -97,7 +107,7 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
       // Desenhamos de Fora para Dentro para que se sobreponham na perfeição.
       // ==========================================
       
-      // BERMA 3 (ZONA DE APEX CRÍTICO: 100px): Vermelho Total Sólido (1.60w => 25px líquidos)
+      // BERMA 3 (ZONA DE APEX CRÍTICO: 100px): Vermelho Total Sólido (1.90w => +30px de raio visual)
       ctx.setLineDash([]);
       ctx.beginPath();
       let isDrawingApex = false;
@@ -109,11 +119,11 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
       }
       if (spline[0].isApexTight && spline[spline.length-1].isApexTight) ctx.lineTo(spline[0].x, spline[0].y);
       ctx.strokeStyle = '#D10000'; // Vermelho Total
-      ctx.lineWidth = trackW * 1.60;
+      ctx.lineWidth = trackW * 1.90;
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.stroke();
 
-      // BERMA 2 (ZONA DE AVISO: 500px): Toda Amarela (1.40w => 25px líquidos)
+      // BERMA 2 (ZONA DE AVISO: 500px): Toda Amarela (1.60w => +30px de raio visual)
       ctx.beginPath();
       let isDrawingExt = false;
       for (let i = 0; i < spline.length; i++) {
@@ -127,18 +137,18 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
       // Toda Amarela
       ctx.setLineDash([]);
       ctx.strokeStyle = '#FFD700'; // Amarelo
-      ctx.lineWidth = trackW * 1.40;
+      ctx.lineWidth = trackW * 1.60;
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       ctx.stroke();
 
       // ==========================================
-      // REGRA DE OURO 1: BERMA BASE (TODA A VIA!) (1.20w => 25px líquidos)
+      // REGRA DE OURO 1: BERMA BASE (TODA A VIA!) (1.30w => 25px líquidos)
       // Como é desenhada por cima, sobrepõe-se e "sela" o interior das Bermas 2 e 3 de forma concêntrica!
       // ==========================================
       
       // Toda Branca
       ctx.setLineDash([]);
-      drawVariablePath(spline, 1.20, '#FFFFFF', [], true, 'butt');
+      drawVariablePath(spline, 1.30, '#FFFFFF', [], true, 'butt');
       
       // Asfalto "Runoff" Suave Escoamento (1.04w) - Tapa o meio de todas as zebras para elas formarem aros e não rolos compressores
       drawVariablePath(spline, 1.04, '#282833', [], true, 'round');
@@ -231,6 +241,136 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
           ctx.restore();
       }
       ctx.lineDashOffset = 0;
+
+      // 2.4 Setas da Pit Lane (Antes de o Carro entrar no branch!)
+      if (pitSpline && pitSpline.length > 0) {
+          const pitStart = pitSpline[0];
+          let branchIdx = 0; let minD = Infinity;
+          for (let i=0; i<spline.length; i++) {
+              const dSq = (spline[i].x - pitStart.x)**2 + (spline[i].y - pitStart.y)**2;
+              if (dSq < minD) { minD = dSq; branchIdx = i; }
+          }
+          
+          let arrowDist = 0;
+          let arrowIdx = branchIdx;
+          while (arrowDist < 450) {
+              const prev = (arrowIdx - 1 + spline.length) % spline.length;
+              arrowDist += Math.sqrt((spline[arrowIdx].x - spline[prev].x)**2 + (spline[arrowIdx].y - spline[prev].y)**2);
+              arrowIdx = prev;
+          }
+          
+          const arrowNode = spline[arrowIdx];
+          const nextArrow = spline[(arrowIdx + 5) % spline.length];
+          const dirAngle = Math.atan2(nextArrow.y - arrowNode.y, nextArrow.x - arrowNode.x);
+          
+          const toPitX = pitStart.x - arrowNode.x;
+          const toPitY = pitStart.y - arrowNode.y;
+          const cross = Math.cos(dirAngle) * toPitY - Math.sin(dirAngle) * toPitX;
+          const isRight = cross > 0;
+          
+          ctx.save();
+          ctx.translate(arrowNode.x, arrowNode.y);
+          ctx.rotate(dirAngle);
+          
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+          const pY = isRight ? 40 : -40; // Deslocada do centro 40px na direção da Box
+          ctx.beginPath();
+          ctx.moveTo(35, pY);      // Bico
+          ctx.lineTo(-5, pY - 20); // Aba Cima
+          ctx.lineTo(-5, pY - 8);  // Tronco Cima
+          ctx.lineTo(-45, pY - 8); // Base
+          ctx.lineTo(-45, pY + 8); // Base
+          ctx.lineTo(-5, pY + 8);  // Tronco Baixo
+          ctx.lineTo(-5, pY + 20); // Aba Baixo
+          ctx.fill();
+          
+          ctx.font = '900 28px "Inter", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText("PIT", -75, pY);
+          ctx.restore();
+      }
+
+      // 2.5 Brake Markers & Telemetria em Curva
+      let currentCornerType = 0; 
+      for (let i = 0; i < spline.length; i++) {
+          let thisType = spline[i].isApexTight ? 2 : (spline[i].isExtendedTight ? 1 : 0);
+          if (thisType > 0 && currentCornerType === 0) { 
+              
+              // Olhar em frente na Curva para encontrar a Severidade Máxima Real! 
+              let maxSeverity = thisType;
+              for (let look = 0; look < 200 && (i + look) < spline.length; look++) {
+                  if (spline[i + look].isApexTight) maxSeverity = 2;
+                  if (!spline[i + look].isExtendedTight && !spline[i + look].isApexTight) break; // Terminou a curva
+              }
+              currentCornerType = maxSeverity;
+              
+              let recDist = 0;
+              let sIdx = i;
+              while (recDist < 500) {
+                  const prev = (sIdx - 1 + spline.length) % spline.length;
+                  recDist += Math.sqrt((spline[sIdx].x - spline[prev].x)**2 + (spline[sIdx].y - spline[prev].y)**2);
+                  sIdx = prev;
+              }
+              const sNode = spline[sIdx];
+              const nextS = spline[(sIdx + 5) % spline.length];
+              const sAng = Math.atan2(nextS.y - sNode.y, nextS.x - sNode.x);
+              
+              ctx.save();
+              ctx.translate(sNode.x, sNode.y);
+              ctx.rotate(sAng);
+              
+              // Rodar o Canvas 90 graus para que o topo do Texto aponte para a FRENTE (X+ do Carro)
+              ctx.rotate(Math.PI / 2);
+              
+              // No novo Canvas (rodado 90º): X negativo = lado Esquerdo do carro // Y negativo = Frente do carro
+              const shiftLeft = -35; 
+              
+              // Círculo Vermelho Base (Road Sign F1 Style)
+              ctx.beginPath();
+              ctx.arc(shiftLeft, 0, 35, 0, Math.PI * 2);
+              ctx.fillStyle = 'rgba(209, 0, 0, 0.9)'; // Vermelho Forte
+              ctx.fill();
+              
+              // Círculo Branco Interior (Road Sign F1 Style)
+              ctx.beginPath();
+              ctx.arc(shiftLeft, 0, 26, 0, Math.PI * 2);
+              ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'; // Branco Muro
+              ctx.fill();
+              
+              // Texto Preto Limite de Velocidade
+              const speedLimit = maxSeverity === 2 ? "120" : "180";
+              const gear = maxSeverity === 2 ? "GEAR 3" : "GEAR 5";
+              
+              ctx.fillStyle = '#000000';
+              ctx.font = '900 32px "Inter", sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.fillText(speedLimit, shiftLeft, 2); // alinhamento manual visual ajustado ao centro
+              
+              // Legenda de Transmissão (Gear) - Colada abaixo do Rótulo
+              ctx.font = '900 24px "Inter", sans-serif';
+              ctx.fillStyle = maxSeverity === 2 ? 'rgba(209, 0, 0, 0.8)' : 'rgba(255, 215, 0, 0.8)';
+              ctx.fillText(gear, shiftLeft, 55); // Mais para trás
+              
+              ctx.restore();
+              
+              // 100m Board (Brake Marker) desenhado à parte (Sem Rotação de 90º da Pista)
+              ctx.save();
+              ctx.translate(sNode.x, sNode.y);
+              ctx.rotate(sAng);
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+              const boardY = (sNode.width || 200)/2 + 25;
+              ctx.fillRect(0, -boardY - 15, 30, 30);
+              ctx.fillStyle = '#FFFFFF';
+              ctx.font = 'bold 14px "Inter", sans-serif';
+              ctx.fillText("100", 15, -boardY);
+              ctx.restore();
+              
+          } else if (thisType === 0) {
+              currentCornerType = 0;
+          }
+      }
   }
 
   // 3. ESTRADA DA PIT LANE
@@ -545,9 +685,7 @@ export function drawEnvironments(ctx: CanvasRenderingContext2D, spline: SplineNo
           ctx.restore();
       }
       
-      if (isNewCache) {
-          environmentCollisionCache.set(spline, colCache);
-      }
+      if (isNewCache) environmentCollisionCache.set(spline, colCache);
 }
 
 export function drawF1Car(ctx: CanvasRenderingContext2D, pColor: string, sColor: string, drsEnabled = false) {
@@ -612,4 +750,64 @@ export function drawF1Car(ctx: CanvasRenderingContext2D, pColor: string, sColor:
   ctx.beginPath();
   ctx.arc(-2, 0, 3, -1.5, 1.5);
   ctx.stroke();
+}
+
+export function drawBridges3D(ctx: CanvasRenderingContext2D, spline: SplineNode[]) {
+    const drawVariablePath = (pathNodes: SplineNode[], widthMultiplier: number, color: string, dash: number[] = [], closePath = false, lineCap: CanvasLineCap = 'round') => {
+        if (pathNodes.length < 2) return;
+        ctx.beginPath();
+        ctx.moveTo(pathNodes[0].x, pathNodes[0].y);
+        for (let i = 1; i < pathNodes.length; i++) ctx.lineTo(pathNodes[i].x, pathNodes[i].y);
+        if (closePath) ctx.closePath();
+        ctx.lineWidth = pathNodes[0].width * widthMultiplier;
+        ctx.strokeStyle = color;
+        ctx.lineCap = lineCap;
+        ctx.lineJoin = 'round';
+        ctx.setLineDash(dash);
+        ctx.stroke();
+    };
+    const asphaltColor = '#3f3f4e';
+
+    const bridgeChunks: SplineNode[][] = [];
+    let currentChunk: SplineNode[] = [];
+    for (let idx = 0; idx < spline.length; idx++) {
+        if (spline[idx].isBridge) currentChunk.push(spline[idx]);
+        else if (currentChunk.length > 0) { bridgeChunks.push(currentChunk); currentChunk = []; }
+    }
+    if (currentChunk.length > 0) bridgeChunks.push(currentChunk);
+
+    if (bridgeChunks.length > 0) {
+        // A. Base da Ponte (Muro Negro Maciço com Sombra)
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.9)'; ctx.shadowBlur = 60; ctx.shadowOffsetX = 18; ctx.shadowOffsetY = 36;
+        bridgeChunks.forEach(chunk => { if (chunk.length < 5) return; drawVariablePath(chunk, 1.70, '#111111', [], false, 'butt'); });
+        ctx.restore();
+        
+        // B. Revestimento Fotorealista do Viaduto
+        const vermelhoBase = '#D10000';
+        bridgeChunks.forEach(chunk => {
+            if (chunk.length < 5) return;
+            
+            // 1) Zebras Dinâmicas Condicionais (Cortadas perfeitamente on-demand)
+            let yellowSubChunks: SplineNode[][] = []; let currY: SplineNode[] = [];
+            let redSubChunks: SplineNode[][] = []; let currR: SplineNode[] = [];
+            for (let i = 0; i < chunk.length; i++) {
+                if (chunk[i].isExtendedTight) currY.push(chunk[i]); else if (currY.length > 0) { yellowSubChunks.push(currY); currY = []; }
+                if (chunk[i].isApexTight) currR.push(chunk[i]); else if (currR.length > 0) { redSubChunks.push(currR); currR = []; }
+            }
+            if (currY.length > 0) yellowSubChunks.push(currY);
+            if (currR.length > 0) redSubChunks.push(currR);
+            
+            // Bermas Perigosas (Desenhadas por baixo)
+            redSubChunks.forEach(rc => { if (rc.length>1) drawVariablePath(rc, 1.90, vermelhoBase, [], false, 'butt'); });
+            yellowSubChunks.forEach(yc => { if (yc.length>1) drawVariablePath(yc, 1.60, '#FFD700', [], false, 'butt'); });
+            
+            // 2) Linha Branca Contínua de Limite de Pista
+            drawVariablePath(chunk, 1.30, '#FFFFFF', [], false, 'butt');
+            
+            // 3) Asfalto Interior
+            drawVariablePath(chunk, 1.04, '#282833', [], false, 'round');
+            drawVariablePath(chunk, 1.0, asphaltColor, [], false, 'butt');
+        });
+    }
 }

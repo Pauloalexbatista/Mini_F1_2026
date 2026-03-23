@@ -3,13 +3,14 @@ import { PlayerConfig, getSetupFromSpeed } from '../types';
 import { TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { audio } from '../audio';
 import { updateCarPhysics, CarPhysics } from '../physics';
-import { drawTrack, drawEnvironments, drawF1Car } from '../renderer';
+import { drawTrack, drawEnvironments, drawF1Car, drawBridges3D } from '../renderer';
 
 interface GameProps {
+  key?: React.Key;
   players: PlayerConfig[];
   track: TrackDef;
   totalLaps: number;
-  onBackToMenu: () => void;
+  onBackToMenu: (results?: { playerId: number, position: number, driverName: string }[]) => void;
 }
 
 let GAME_WIDTH = 1280;
@@ -35,7 +36,9 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
   const cameraRef = useRef<{x: number, y: number, scale: number} | null>(null);
   const cameraModeRef = useRef<'CENTRAL' | 'DYNAMIC' | 'QUADRANTS'>('CENTRAL');
   const quadOffsetRef = useRef<{x: number, y: number}>({x: 0, y: 0});
+  const lookAheadRef = useRef<{x: number, y: number}>({x: 0, y: 0});
   const skidMarksRef = useRef<{x: number, y: number, a: number, w: number}[]>([]);
+  const camAngleRef = useRef<number>(0);
   
   const rawTrack = track;
   const spline = React.useMemo(() => rawTrack.nodes, [rawTrack]);
@@ -65,6 +68,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
           break;
         }
       }
+      // 2. Anti-Sobreposição Removida (Pontes Habilitadas!)
+      // O sistema agora permite desenhar em formato Figura-8. O motor F1 usa Coerência Temporal para gerir viadutos!
       
       const botSpeed = 160 + Math.floor(Math.random() * 21) * 10;
       
@@ -113,7 +118,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
     return () => {
       audio.stopAllEngines();
     };
-  }, [players, spline]);
+  }, [players, spline, playerSetups]);
 
   // Start sequence
   useEffect(() => {
@@ -197,7 +202,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
     let animationFrameId: number;
     let lastTime = performance.now();
 
-    const pitSpline = rawTrack.pitNodes ? rawTrack.pitNodes : null;
+    const pitSpline = (rawTrack.pitNodes && rawTrack.pitNodes.length > 0) ? rawTrack.pitNodes : null;
     let pitEntrySplineIndex = -1;
     if (pitSpline) {
       let minDist = Infinity;
@@ -237,21 +242,26 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
           // Calculate absolute speed required globally for AI physics, Skid Marks and DRS limits
           const speed = Math.sqrt(car.vx*car.vx + car.vy*car.vy);
 
-          // 1. Find Closest Spline Node
+          // 1. Find Closest Spline Node with Temporal Coherence (Supports 3D Bridges!)
           let minSplineDistSq = Infinity;
           let closestIndex = car.currentWaypoint;
-          for (let i = 0; i < spline.length; i++) {
-             // ANTI-TELEPORTATION MASK (Crucial for Figure-8 tracks like Suzuka!)
-             // Only allow the car to snap to nodes that are structurally adjacent to its last known sequence waypoint.
-             let idxDist = Math.abs(i - car.currentWaypoint);
-             if (idxDist > spline.length / 2) idxDist = spline.length - idxDist; // Circular array wrap
+          
+          let searchRange = spline.length; 
+          if (car.currentWaypoint > 0) {
+             // Ao limitar a pesquisa aos 400 nós mais próximos do carro (8.000 pixels de pista),
+             // garantimos que quando o carro passa debaixo de uma ponte, ele NÃO faz "snap" matemático
+             // para o nó da ponte lá em cima (que pode estar milissegundos mais perto fisicamente mas a léguas de distância na Corrida!).
+             searchRange = 400; 
+          }
+
+          for (let s = 0; s <= searchRange * 2; s++) {
+             let i = (car.currentWaypoint - searchRange + s + spline.length) % spline.length;
+             if (searchRange === spline.length && s >= spline.length) break;
              
-             if (idxDist < 40) {
-                 const distSq = (car.x - spline[i].x)**2 + (car.y - spline[i].y)**2;
-                 if (distSq < minSplineDistSq) {
-                   minSplineDistSq = distSq;
-                   closestIndex = i;
-                 }
+             const distSq = (car.x - spline[i].x)**2 + (car.y - spline[i].y)**2;
+             if (distSq < minSplineDistSq) {
+               minSplineDistSq = distSq;
+               closestIndex = i;
              }
           }
           
@@ -281,21 +291,20 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
           if (pitSpline && pitDistToCenter < pitSpline[closestPitIndex].width * 0.5 && pitDistToCenter < distToCenter) {
              isInPitLane = true;
           } else {
-             // A física agora herda a topologia estática em O(1) diretamente da Inicialização da Pista!
+             // A física agora herda a topologia Métrica a 100%! (+30px por cor)
              let extendedTight = closestNode.isExtendedTight || false;
              let apexTight = closestNode.isApexTight || false;
 
-             if (apexTight && distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.7) {
-                 surface = 'CURB_APEX';
-             } else if (extendedTight && !apexTight && distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.7) {
-                 surface = 'CURB_WIDE';
-             } else if (!extendedTight && !apexTight && distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.6) {
-                 surface = 'CURB';
-             } else if (
-                 (apexTight && distToCenter > trackWidth * 0.7) || 
-                 (extendedTight && !apexTight && distToCenter > trackWidth * 0.7) || 
-                 (!extendedTight && !apexTight && distToCenter > trackWidth * 0.6)
-             ) {
+             if (apexTight && distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.95) {
+                 if (distToCenter > trackWidth * 0.80) surface = 'CURB_APEX'; // Vermelha (70%)
+                 else if (distToCenter > trackWidth * 0.65) surface = 'CURB_WIDE'; // Amarela (80%)
+                 else surface = 'CURB'; // Branca (90%)
+             } else if (extendedTight && distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.80) {
+                 if (distToCenter > trackWidth * 0.65) surface = 'CURB_WIDE'; // Amarela (80%)
+                 else surface = 'CURB'; // Branca (90%)
+             } else if (distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.65) {
+                 surface = 'CURB'; // Branca (90%)
+             } else if (distToCenter > trackWidth * 0.5) {
                  surface = 'GRASS';
              }
           }
@@ -452,22 +461,11 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
           }
 
           // --- SURFACE FRICTION PHYSICS ---
-          // Cria arrasto dinâmico nas "rodas" do carro em vez de ativar travões bruscos!
           if (surface === 'GRASS') {
-             car.damage = Math.min(90, car.damage + 0.01); // Relva suja os pneus incrivelmente devagar (0.01 por tick)
-             // Soltámos muito mais a relva! Em vez de te espetar a 40km/h num instante (0.94), agora escorrega suavemente (0.98)
-             if (speed > car.maxSpeed * 0.4) {
+             car.damage = Math.min(90, car.damage + 0.01); 
+             if (speed > car.maxSpeed * 0.6) {
+                // A relva tem um cap de velocidade nos 60% e arrasta mais forte (Gravel Trap feel)
                 car.vx *= 0.98; car.vy *= 0.98; 
-             }
-          } else if (surface === 'CURB_WIDE') {
-             // 20% Penalty smoothly (max 80% speed)
-             if (speed > car.maxSpeed * 0.8) {
-                car.vx *= 0.97; car.vy *= 0.97; 
-             }
-          } else if (surface === 'CURB') {
-             // 10% Penalty smoothly (max 90% speed)
-             if (speed > car.maxSpeed * 0.9) {
-                car.vx *= 0.985; car.vy *= 0.985; 
              }
           }
 
@@ -504,26 +502,44 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
           // Collisions (Car vs Car push apart)
           carsRef.current.forEach(otherCar => {
             if (otherCar.id > car.id) {
-              const dx = otherCar.x - car.x;
-              const dy = otherCar.y - car.y;
-              const dist = Math.sqrt(dx*dx + dy*dy);
-              const minColDist = 40; // 40px radius
-              if (dist < minColDist && dist > 0.1) {
-                // compute impact damage
-                const nx = dx / dist; const ny = dy / dist;
-                const relVx = car.vx - otherCar.vx;
-                const relVy = car.vy - otherCar.vy;
-                const impactSpeed = Math.abs(relVx * nx + relVy * ny);
-                if (impactSpeed > 200) {
-                   car.damage = Math.min(90, car.damage + 5);
-                   otherCar.damage = Math.min(90, otherCar.damage + 5);
-                }
+              // Z-Index Elevation Check (Pontes 3D F1)
+              // Se os carros estão na mesma coordenada geométrica, mas separados por > 500 fatias na narrativa da pista,
+              // um está em cima da Ponte e o outro debaixo do Túnel. A colisão é fisicamente impossível!
+              const trackDist = Math.abs(car.currentWaypoint - otherCar.currentWaypoint);
+              const isSameZLevel = !(trackDist > 500 && trackDist < spline.length - 500);
 
-                const push = (minColDist - dist) * 0.5;
-                const pushX = nx * push;
-                const pushY = ny * push;
-                car.x -= pushX; car.y -= pushY;
-                otherCar.x += pushX; otherCar.y += pushY;
+              if (isSameZLevel) {
+                  const dx = otherCar.x - car.x;
+                  const dy = otherCar.y - car.y;
+                  const dist = Math.sqrt(dx*dx + dy*dy);
+                  const minColDist = 40; // 40px radius
+                  if (dist < minColDist && dist > 0.1) {
+                    // compute impact damage
+                    const nx = dx / dist; const ny = dy / dist;
+                    const relVx = car.vx - otherCar.vx;
+                    const relVy = car.vy - otherCar.vy;
+                    const impactSpeed = Math.abs(relVx * nx + relVy * ny);
+                    if (impactSpeed > 200) {
+                       car.damage = Math.min(90, car.damage + 5);
+                       otherCar.damage = Math.min(90, otherCar.damage + 5);
+                    }
+
+                    const push = (minColDist - dist) * 0.5;
+                    const pushX = nx * push;
+                    const pushY = ny * push;
+                    car.x -= pushX; car.y -= pushY;
+                    otherCar.x += pushX; otherCar.y += pushY;
+                    
+                    // Transferência de Momento Elástico (Bounce Real)
+                    if (relVx * nx + relVy * ny > 0) {
+                        const restitution = 0.5; // Fator de Bounciness F1 (Fibra de Carbono)
+                        const impulse = (1 + restitution) * (relVx * nx + relVy * ny) / 2; 
+                        const impulseX = impulse * nx;
+                        const impulseY = impulse * ny;
+                        car.vx -= impulseX; car.vy -= impulseY;
+                        otherCar.vx += impulseX; otherCar.vy += impulseY;
+                    }
+                  }
               }
             }
           });
@@ -567,9 +583,19 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
               }
           }
 
+          // Overrides de Condução (Carro terminou a corrida!)
+          if (car.finishTime !== null) {
+              car.throttle = 0.0;
+              car.steer *= 0.5; // Não volta a curvar a fundo
+              // Trava suavemente
+              if (speed > 200) car.brake = 0.6;
+              else if (speed > 50) car.brake = 0.9;
+              else car.brake = 1.0; 
+          }
+
           // Apply Physics
           updateCarPhysics(car, dt, surface);
-          audio.updateEngine(car.id, Math.sqrt(car.vx*car.vx + car.vy*car.vy) / 1200, car.isBot);
+          audio.updateEngine(car.id, Math.sqrt(car.vx*car.vx + car.vy*car.vy) / 1200, car.throttle, car.isBot);
 
           // Generate Persistent Skid Marks purely if Tire Degradation Physics are in Tier III / Tier IV conditions!
           if (speed > 100 && car.isSkidding) {
@@ -661,35 +687,68 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
       let quadScreenOffsetX = 0;
       let quadScreenOffsetY = 0;
 
-      if (cameraModeRef.current === 'DYNAMIC' && startSequence >= 4) {
-          // Look ahead based on velocity vector for smoother turns, providing realistic anticipation
-          const lookAheadX = mainCar.vx * 0.6; // 0.6 seconds physical look-ahead
-          const lookAheadY = mainCar.vy * 0.6;
-          targetCamX += lookAheadX;
-          targetCamY += lookAheadY;
-      } else if (cameraModeRef.current === 'QUADRANTS' && startSequence >= 4) {
-          // Quadrants Mode: The car is pushed to the opposite screen quadrant of its travel direction!
-          // So if car goes UP-LEFT (vx<0, vy<0), it sits in BOTTOM-RIGHT (Quad 2:2) to provide max visibility ahead (Top-Left).
-          const offsetW = GAME_WIDTH * 0.25; // 25% screen offset 
-          const offsetH = GAME_HEIGHT * 0.25;
+      // ----------------------------------------------------
+      // APEX LOOK-AHEAD CAMERA (O Foco Ocular de um Piloto de F1)
+      // Em vez de olhar ingenuamente para a relva à frente do Nariz do Carro, 
+      // o Piloto projeta o olhar para o interior da próxima Curva (Spline Path).
+      let lookAngle = mainCar.angle;
+      if (spline && spline.length > 0) {
+          // O quão à frente o piloto olha depende intrinsecamente da velocidade
+          const lookAheadNodes = Math.min(25, Math.floor(speed / 40) + 5); 
+          const futureIndex = (mainCar.currentWaypoint + lookAheadNodes) % spline.length;
+          const futureNode = spline[futureIndex];
           
-          if (mainCar.vx > 20) quadScreenOffsetX = -offsetW;
-          else if (mainCar.vx < -20) quadScreenOffsetX = offsetW;
-
-          if (mainCar.vy > 20) quadScreenOffsetY = -offsetH;
-          else if (mainCar.vy < -20) quadScreenOffsetY = offsetH;
+          if (futureNode) {
+              // Vector do carro para o asfalto futuro
+              lookAngle = Math.atan2(futureNode.y - mainCar.y, futureNode.x - mainCar.x);
+              
+              // Se o carro for em marcha atrás (ou derrapar 180º), invertemos o ângulo para não ficar estrábico 
+              const cosDiff = Math.cos(lookAngle) * Math.cos(mainCar.angle) + Math.sin(lookAngle) * Math.sin(mainCar.angle);
+              if (cosDiff < -0.5) lookAngle += Math.PI; // Face backwards smoothly
+          }
       }
 
+      // Filtro de Micro-Tremor: Apenas segue alterações do angulo se o carro estiver efetivamente a andar. 
+      let angleDiff = lookAngle - camAngleRef.current;
+      while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+      while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
+      
+      if (speed > 2) {
+          camAngleRef.current += angleDiff * 0.05;
+      }
+
+      if (cameraModeRef.current === 'DYNAMIC' && startSequence >= 4) {
+          // Dynamic Mode: Smooth scaling look-ahead sem jitter.
+          const speedRatio = Math.min(1.0, speed / 1000); 
+          const maxDynamicW = GAME_WIDTH * 0.35;
+          const maxDynamicH = GAME_HEIGHT * 0.35;
+          
+          quadScreenOffsetX = -Math.cos(camAngleRef.current) * (speedRatio * maxDynamicW);
+          quadScreenOffsetY = -Math.sin(camAngleRef.current) * (speedRatio * maxDynamicH);
+          
+      } else if (cameraModeRef.current === 'QUADRANTS' && startSequence >= 4) {
+          // Quadrants Mode: Transição 100% analógica em vez da quebra agressiva de 0.2
+          const offsetW = GAME_WIDTH * 0.25;
+          const offsetH = GAME_HEIGHT * 0.25;
+          
+          const cosA = Math.cos(camAngleRef.current);
+          const sinA = Math.sin(camAngleRef.current);
+          
+          quadScreenOffsetX = -cosA * offsetW;
+          quadScreenOffsetY = -sinA * offsetH;
+      }
+      
       if (!cameraRef.current) cameraRef.current = { x: targetCamX, y: targetCamY, scale: 0.08 };
       
-      // Smooth fluid tracking for car target
-      cameraRef.current.x += (targetCamX - cameraRef.current.x) * 0.08;
-      cameraRef.current.y += (targetCamY - cameraRef.current.y) * 0.08;
+      // Smooth fluid tracking for car target (World Base) - Tensionado de 0.08 para 0.30 para acompanhar velocidades F1 sem deixar o carro chegar à borda!
+      cameraRef.current.x += (targetCamX - cameraRef.current.x) * 0.30;
+      cameraRef.current.y += (targetCamY - cameraRef.current.y) * 0.30;
       cameraRef.current.scale += (targetScale - cameraRef.current.scale) * 0.02;
 
-      // Smooth pan for the Quadrant Screen Offset!
-      quadOffsetRef.current.x += (quadScreenOffsetX - quadOffsetRef.current.x) * 0.04;
-      quadOffsetRef.current.y += (quadScreenOffsetY - quadOffsetRef.current.y) * 0.04;
+      // Smooth pan for the Screen Offset (Viewport Base)
+      const panSpeed = cameraModeRef.current === 'DYNAMIC' ? 0.05 : 0.015;
+      quadOffsetRef.current.x += (quadScreenOffsetX - quadOffsetRef.current.x) * panSpeed;
+      quadOffsetRef.current.y += (quadScreenOffsetY - quadOffsetRef.current.y) * panSpeed;
 
       // SUPER AGGRESSIVE HARD RESET
       // Fallback natively to setTransform(1,0,0,1,0,0) in case resetTransform fails silently in React Canvas wrappers
@@ -699,14 +758,15 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
 
       ctx.globalAlpha = 1.0;
       ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#1A3314'; // Fallback grass shade base
+      ctx.fillStyle = '#315722'; // Fallback grass shade base harmonizado
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
       ctx.save();
 
-      ctx.translate(GAME_WIDTH/2 + quadOffsetRef.current.x, GAME_HEIGHT/2 + quadOffsetRef.current.y);
+      // Blindagem Sub-Pixel Math.round(): Impede que translações a 0.001 pixels criem Anti-Aliasing no ecrã = Jitter Visual Zero!
+      ctx.translate(Math.round(GAME_WIDTH/2 + quadOffsetRef.current.x), Math.round(GAME_HEIGHT/2 + quadOffsetRef.current.y));
       ctx.scale(cameraRef.current.scale, cameraRef.current.scale);
-      ctx.translate(-cameraRef.current.x, -cameraRef.current.y);
+      ctx.translate(Math.round(-cameraRef.current.x), Math.round(-cameraRef.current.y));
 
       // Draw map mathematically in real-time, preventing DOM memory limits on ultra-large splines
       drawTrack(ctx, spline, pitSpline, false);
@@ -724,17 +784,32 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
          ctx.restore();
       });
 
-      // Draw cars
+      // Draw "Under-Bridge" or Ground Cars (Level 0)
       carsRef.current.forEach(car => {
+        const cNode = spline[car.currentWaypoint % spline.length];
+        if (cNode?.isBridge) return; // Vai ser desenhado DEPOIS da Ponte!
+          
         ctx.save();
         ctx.translate(car.x, car.y);
         ctx.rotate(car.angle);
-        
         ctx.scale(1.5, 1.5); // F1 visual scale
-
-        // Offload mathematical rendering to dedicated Engine layer
         drawF1Car(ctx, car.color, car.color2 || '#222', car.drsEnabled);
+        ctx.restore();
+      });
 
+      // Z-INDEX LEVEL 1: OVERPASS BRIDGES (Obscures anything underneath!)
+      drawBridges3D(ctx, spline);
+
+      // Draw "Top-Bridge" Cars (Level 1)
+      carsRef.current.forEach(car => {
+        const cNode = spline[car.currentWaypoint % spline.length];
+        if (!cNode?.isBridge) return; // Já foi desenhado debaixo da ponte
+          
+        ctx.save();
+        ctx.translate(car.x, car.y);
+        ctx.rotate(car.angle);
+        ctx.scale(1.5, 1.5);
+        drawF1Car(ctx, car.color, car.color2 || '#222', car.drsEnabled);
         ctx.restore();
       });
 
@@ -748,28 +823,28 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
       // Painel de F1 (Velocímetro, Saúde do Motor e Pneus) ao centro em baixo
       const speedKmH = Math.min(999, Math.ceil(speed * 0.36)); 
       const engineHealth = Math.floor(100 - mainCar.damage);
-      const tireHealth = Math.floor(mainCar.tireHealth || 100);
+      const tireHealth = (mainCar.tireHealth !== undefined ? mainCar.tireHealth : 100).toFixed(1);
       
       const hudX = GAME_WIDTH / 2;
       const hudY = GAME_HEIGHT - 80;
 
-      // Caixa HUD Preta de fundo (Alargada para os 3 dados)
+      // Caixa HUD Preta de fundo (Alargada para não cortar as Margens do % nos Pneus!)
       ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
-      ctx.fillRect(hudX - 250, hudY, 500, 60);
+      ctx.fillRect(hudX - 290, hudY, 580, 60);
       
       // --- VELOCÍMETRO ---
       ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(hudX - 230, hudY + 10, 85, 40);
+      ctx.fillRect(hudX - 270, hudY + 10, 85, 40);
       
       ctx.font = '900 36px monospace';
       ctx.fillStyle = '#000000';
       ctx.textAlign = 'right';
-      ctx.fillText(`${speedKmH.toString().padStart(3, '0')}`, hudX - 150, hudY + 41);
+      ctx.fillText(`${speedKmH.toString().padStart(3, '0')}`, hudX - 190, hudY + 41);
       
       ctx.font = 'bold 18px monospace';
       ctx.fillStyle = '#FFFFFF';
       ctx.textAlign = 'left';
-      ctx.fillText("KM/H", hudX - 140, hudY + 38);
+      ctx.fillText("KM/H", hudX - 180, hudY + 38);
 
       // --- ENGINE HEALTH (%) ---
       ctx.font = 'bold 18px monospace';
@@ -789,7 +864,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
       ctx.fillText("PNEUS", hudX + 150, hudY + 38);
 
       ctx.font = '900 36px monospace';
-      ctx.fillStyle = tireHealth < 40 ? '#FF0000' : (tireHealth < 70 ? '#FFD700' : '#00FF00');
+      const parsedTire = parseFloat(tireHealth);
+      ctx.fillStyle = parsedTire < 40 ? '#FF0000' : (parsedTire < 70 ? '#FFD700' : '#00FF00');
       ctx.textAlign = 'left';
       ctx.fillText(`${tireHealth}%`, hudX + 160, hudY + 41);
 
@@ -1004,7 +1080,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
 
       {/* Camera Mode Indicator HUD */}
       {!isSetupPhase && !raceFinished && startSequence >= 4 && (
-         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 bg-black/50 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 flex items-center gap-3">
+         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-black/50 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 flex items-center gap-3">
              <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">TECLA '{players.find(p => !p.isBot)?.controls?.camera?.replace('Key', '')?.replace('Arrow', '') || 'C'}' CÂMARA:</span>
              <span className={`text-[10px] font-black uppercase tracking-widest ${cameraModeUI === 'CENTRAL' ? 'text-white' : (cameraModeUI === 'DYNAMIC' ? 'text-[#39FF14]' : 'text-yellow-400')}`}>
                  {cameraModeUI === 'CENTRAL' ? 'CLÁSSICA CENTRAL' : (cameraModeUI === 'DYNAMIC' ? 'DINÂMICA (ANTECIPAÇÃO)' : 'MODO QUADRANTES OBTUSOS')}
@@ -1032,7 +1108,22 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
               </div>
             )})}
           </div>
-          <button onClick={onBackToMenu} className="px-8 py-4 bg-white text-black font-bold">VOLTAR AO MENU</button>
+          <button 
+             onClick={() => {
+                const results = carsRef.current.sort((a,b) => (a.finishTime || Infinity) - (b.finishTime || Infinity)).map((c, idx) => {
+                   const pDetails = players.find(p => p.id === c.id);
+                   return {
+                      playerId: c.id,
+                      position: idx + 1,
+                      driverName: pDetails?.driverName || (c.isBot ? 'BOT AI' : `P${c.id}`)
+                   };
+                });
+                onBackToMenu(results);
+             }} 
+             className="px-8 py-4 bg-white text-black font-bold uppercase tracking-widest rounded transition hover:bg-gray-300"
+          >
+             CONTINUAR
+          </button>
         </div>
       )}
     </div>

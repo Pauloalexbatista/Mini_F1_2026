@@ -10,16 +10,16 @@ A Pista Principal é o coração estrutural. O Centro da Pista espalha-se simetr
 **Largura Total do Asfalto:** `250 Px`
 **Largura Mínima Absoluta de Sobrevivência do Corredor (Muro-a-Muro):** `310 Px`
 
-| Nível | Tipo de Piso | Cores (Tinta) | Penalidade Física | Regra de Existência | Espessura (Px) | Raio (Centro à Borda) |
+| Nível | Tipo de Piso | Cores (Tinta) | Penalidade Física | Regra de Existência | Espessura (Px) | Raio Acumulado (Margem) |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
 | **5** | **Muro** | Preto Sólido | **100%** *(Colisão/Dano)* | **Tem que existir sempre** (Barreira Inquebrável) | **5 Px** | Dinâmico *(máx 425 Px)* |
-| **4** | **Relva / Gravilha** | Verde Escuro | **- 40%** | Variável. **Só se houver espaço livre.** | **0 a 220 Px** | De 200 Px até 425 Px |
-| **3** | **Berma 3 (Perigo)** | Vermelho Total | **- 30%** | Só a **100 Px** das curvas fortes. *(Só se houver espaço)* | **25 Px** | De 175 Px até 200 Px |
-| **2** | **Berma 2 (Aviso)** | Amarelo Total | **- 20%** | Só a **500 Px** das curvas fortes. *(Só se houver espaço)* | **25 Px** | De 150 Px até 175 Px |
-| **1** | **Berma 1 (Standard)** | Branco Total | **- 10%** | **Tem que existir sempre** (Borda contínua). | **25 Px** | De 125 Px até 150 Px |
-| **0** | **Estrada (Asfalto)** | Cinza Escuro | **0%** *(Tração ideal)* | **Tem que existir sempre.** | **125 Px** | 0 Px a 125 Px |
+| **4** | **Relva / Gravilha** | Verde Escuro | **Top Speed 60%** | Variável. **Só se houver espaço livre.** | **Variável** | De 215 Px até 425 Px |
+| **3** | **Berma 3 (Perigo)** | Vermelho Total | **Top Speed 70%** | Só a **100 Px** das curvas fortes. *(Se houver espaço)* | **30 Px** | De 185 Px até 215 Px |
+| **2** | **Berma 2 (Aviso)** | Amarelo Total | **Top Speed 80%** | Só a **500 Px** das curvas fortes. *(Se houver espaço)* | **30 Px** | De 155 Px até 185 Px |
+| **1** | **Berma 1 (Standard)** | Branco Total | **Top Speed 90%** | **Tem que existir sempre** (Borda contínua). | **30 Px** | De 125 Px até 155 Px |
+| **0** | **Estrada (Asfalto)** | Cinza Escuro | **Top Speed 100%** | **Tem que existir sempre.** | **125 Px** | 0 Px a 125 Px |
 
-*Nota: As Bermas 1, 2 e 3 desenham-se de fora para dentro formando camadas em "Piso". Por isso, a zona crítica visual de uma curva tem* **75 Px visíveis** *(25px+25px+25px) de borracha punitiva cumulativa acumulada face ao Asfalto normal. Mas em pistas apertadas com colisões, as Bermas 3 e 2 e a Relva evaporam, comprimindo a Pista obrigatoriamente para a sua Raiz Mínima Estrutural de `155 Px` (Asfalto + Berma 1 + Muro).*
+*Nota: As Bermas 1, 2 e 3 desenham-se de fora para dentro formando camadas em "Piso". Por isso, a zona crítica visual de uma curva tem* **90 Px visíveis** *(30px+30px+30px) de borracha punitiva cumulativa adicionada face ao Asfalto normal. Mas em pistas de configuração "Street Circuit" extremamente apertadas com colisões geradas via Voronoi, as Bermas 3, 2 e a Relva são obliteradas pelos edifícios, comprimindo a Pista obrigatoriamente para a sua Raiz Mínima Estrutural de Sobrevivência:* **Muro -> Berma Branca -> Estrada -> Berma Branca -> Muro.**
 
 ---
 
@@ -106,3 +106,38 @@ A velocidade de Degradação Térmica obedece a uma métrica rigorosa:
 | **IV: Travagem a Fundo** | `Nível 4` (Crítico) | **Visíveis** (Sempre) | Bloquear e arrastar as rodas no asfalto (Flat-Spotting) rasga os pneus instantaneamente. |
 
 *(Aprovado e cravado a Ouro no código-fonte da Engine, 2026).*
+
+
+---
+
+## 7. OCLUSÃO VISUAL Z-INDEX E PONTES F1 (Suzuka Mode)
+
+O Motor suporta a construção livre de **Viadutos 3D** sem sacrificar o Render a 60FPS:
+
+1. **Topologia Z-Index:** Quando o construtor sobrepõe fitas com enorme Distância Cronológica, mas zero Distância Física, o Motor ativa Flag Nodes. A reta superior ganha a label isBridge e a reta cruzeta inferior isTunnel.
+2. **Câmaras Transparentes:** No pipeline Z-Sorting (Game.tsx), desenham-se 4 camadas distintas em ordem absoluta:
+   * Chão Base com Sombras Projetadas Gaussianas.
+   * Carros Subjacentes (Nível 0 - encobertos fisicamente quando estão sob túnel).
+   * Rampa Asfáltica da Ponte e Lancis em Elevação Gráfica Z-Index.
+   * Carros do Viaduto (Nível 1 - expostos perfeitamente na câmara aérea).
+
+---
+
+## 8. FOTOREALISMO DE RUA (Voronoi Wall Squeezing)
+
+**Circuitos Urbanos e Faixas Paralelas:**
+Para impedir o excesso de Erva Morta nos circuitos super fechados, o Algoritmo O(N^2) Voronoi analisa os raios de proximidade dos eixos. Quando duas vias estão tangentes (sem cruzamento), ocorre o Squeeze:
+
+* O Motor engole a margem de Relva de 425 Px para ambas as faixas.
+* As pistas fundem-se a meio caminho exato, partilhando visualmente a mesma divisória num Muro Único de Betão Contínuo (Mónaco Style).
+* Um **Filtro Dinâmico Smooth (Passa-Baixo)** corrige nativamente as diagonais da topologia em zigue-zague, atirando Muros lisos imperturbáveis para a grelha final de jogo.
+
+---
+
+### APÊNDICE: EQUAÇÕES FÍSICAS REAIS (v2026)
+
+**O(N²) Engine de Viadutos:**
+Descobre Pontes cruzando eixos onde a physicalD < 100 píxeis e a pathDist > 1000 (ou seja, nós distantes na cronologia do desenho, mas geometricamente por cima uns dos outros). Os 30 nós limítrofes recebem flag isBridge (Pista de Topo) ou isTunnel (Pista de Fundo).
+
+**O(N) Filtro Smooth do Muro Voronoi:**
+Nas aproximações em pistas de Rua, o Muro Matemático (maxWallRadius) é encolhido estritamente para Math.max(w * 0.65, minOtherSpace / 2) (Limite absoluto: margem da Berma Branca). De forma a erradicar o efeito de \'Ondulação de Pixels\' (Scalloping), todos os muros passam num filtro Passa-Baixo (Gaussian Moving Average) através dos últimos 5 nós (SMOOTH_WINDOW = 5). Pistas em *Suzuka Mode* (Túneis/Pontes) mantêm obrigatoriamente a Cota de Proteção máxima de 1.70w.

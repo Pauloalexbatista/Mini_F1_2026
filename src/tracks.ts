@@ -8,6 +8,8 @@ export interface SplineNode {
   isApexTight?: boolean;
   isExtendedTight?: boolean;
   maxWallRadius?: number;
+  isBridge?: boolean;
+  isTunnel?: boolean;
 }
 
 export interface TrackDef {
@@ -76,8 +78,9 @@ export function computeSpline(nodes: SplineNode[], isClosed = true, pStartTangen
   // Se aproximares pistas, reduz a relva para Muro Limpo (Street Circuit mode!)
   // ==========================================
   const totalLen = isClosed ? (spline[spline.length - 1]?.distFromStart || 0) : 0;
+  const minDists = new Array(spline.length).fill(Infinity);
+  
   for (let i = 0; i < spline.length; i++) {
-        let minOtherDistSq = Infinity;
         for (let j = 0; j < spline.length; j++) {
              // Use physical path length instead of array indices to protect extremely tight hairpins
              let d1 = spline[i].distFromStart || 0;
@@ -92,13 +95,69 @@ export function computeSpline(nodes: SplineNode[], isClosed = true, pStartTangen
              // Só medimos perigo se for outra pista vizinha longe (pathDist > 1000) 
              // OU se for um gancho apertado onde a fita andou mais 1.5x do que o voo do pássaro!
              if (pathDist > 1000 || (pathDist > 150 && pathDist > physicalD * 1.5)) {
-                 if (distSq < minOtherDistSq) minOtherDistSq = distSq;
+                 if (distSq < minDists[i]) minDists[i] = distSq;
+             }
+             
+             // DETEÇÃO DE PONTES Z-INDEX E TÚNEIS (Suzuka Mode)
+             // Se duas retas se cruzam cruamente (physicalD < 80) e estão a léguas de distância cronológica, é um cruzamento 3D!
+             if (i > j && pathDist > 1000 && physicalD < 100) {
+                 // A linha que foi desenhada *depois* (i) passa por cima da (j) => Viaduto
+                 // A linha desenhada no chão original (j) passa por baixo de (i) => Túnel
+                 for(let b = -30; b <= 30; b++) {
+                     let idxBridge = (i + b + spline.length) % spline.length;
+                     spline[idxBridge].isBridge = true;
+                     
+                     let idxTunnel = (j + b + spline.length) % spline.length;
+                     spline[idxTunnel].isTunnel = true;
+                 }
              }
         }
-        
+  }
+  
+  // APLICAÇÃO GEOMÉTRICA FINAL (Passo O(N) com flags solidificadas)
+  for (let i = 0; i < spline.length; i++) {
         const standardMaxR = spline[i].width * 1.70; // 425px limit as documented
-        // Baseamos no 1.70w puro. Mas se um vizinho fechar o cerco, o Muro de Betão encolhe cortando a relva!
-        spline[i].maxWallRadius = Math.max(spline[i].width * 0.70, Math.min(standardMaxR, (Math.sqrt(minOtherDistSq) / 2) - 2));
+        
+        let maxShrinkR = standardMaxR;
+        if (minDists[i] !== Infinity) {
+            // O raio bate na outra pista a meio caminho (minOutherDist / 2) garantindo a partilha visual do Muro Betão.
+            // Limite Absoluto: Berma Branca (0.65w).
+            maxShrinkR = Math.max(spline[i].width * 0.65, Math.sqrt(minDists[i]) / 2);
+        }
+        
+        // Pistas em Cota Superior (Viaduto) ou Inferior Direta (Túnel) IGNORAM o encolhimento de muros no cruzamento!
+        if (spline[i].isBridge || spline[i].isTunnel) {
+             spline[i].maxWallRadius = standardMaxR;
+        } else {
+             // Opcão dinâmica que devolve o fotorealismo puro do Mónaco / Street Circuits!
+             spline[i].maxWallRadius = Math.min(standardMaxR, maxShrinkR);
+        }
+  }
+
+  // ==========================================
+  // O(N) GAUSSIAN BLUR (SMOOTHING) DA RELVA E MUROS
+  // O Voronoi discreto gera saltos diagonais que parecem "bermas onduladas". 
+  // Filtrar o maxWallRadius com uma janela-móvel apaga as altas frequências!
+  // ==========================================
+  const smoothedMaxR = new Array(spline.length).fill(0);
+  const SMOOTH_WINDOW = 5;
+  for (let i = 0; i < spline.length; i++) {
+        let sum = 0;
+        let count = 0;
+        for (let w = -SMOOTH_WINDOW; w <= SMOOTH_WINDOW; w++) {
+            const idx = i + w;
+            if (isClosed) {
+                sum += spline[(idx + spline.length) % spline.length].maxWallRadius!;
+                count++;
+            } else if (idx >= 0 && idx < spline.length) {
+                sum += spline[idx].maxWallRadius!;
+                count++;
+            }
+        }
+        smoothedMaxR[i] = sum / count;
+  }
+  for(let i = 0; i < spline.length; i++) {
+        spline[i].maxWallRadius = smoothedMaxR[i];
   }
 
   // ==========================================

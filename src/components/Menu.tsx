@@ -152,8 +152,8 @@ interface MenuProps {
   players: PlayerConfig[];
   playerCount: number;
   setPlayerCount: (count: number) => void;
-  selectedTrack: string;
-  setSelectedTrack: (id: string) => void;
+  selectedTracks: string[];
+  setSelectedTracks: React.Dispatch<React.SetStateAction<string[]>>;
   totalLaps: number;
   setTotalLaps: (laps: number) => void;
   onStart: () => void;
@@ -165,15 +165,37 @@ interface MenuProps {
   tracks: TrackDef[];
 }
 
-export default function Menu({ players, playerCount, setPlayerCount, selectedTrack, setSelectedTrack, totalLaps, setTotalLaps, onStart, onOpenBuilder, onOpenProfile, onUpdatePlayer, onDeleteTrack, user, tracks }: MenuProps) {
+export default function Menu({ players, playerCount, setPlayerCount, selectedTracks, setSelectedTracks, totalLaps, setTotalLaps, onStart, onOpenBuilder, onOpenProfile, onUpdatePlayer, onDeleteTrack, user, tracks }: MenuProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'teams' | 'tracks'>('overview');
+  const [sortBy, setSortBy] = useState<'name' | 'lengthKm' | 'topSpeedKmh' | 'corners'>('name');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [activeKeyConfig, setActiveKeyConfig] = useState<{ playerIndex: number, action: keyof PlayerConfig['controls'] } | null>(null);
   
   const ALL_TRACKS = [...tracks, ...DEFAULT_TRACKS.filter(sysT => !tracks.some(dbT => dbT.id === sysT.id))];
   const tracksAreReady = ALL_TRACKS.length > 0;
 
   // Helper guard
-  const activeTrackObj = ALL_TRACKS.find(t => t.id === selectedTrack) || ALL_TRACKS[0] || null;
+  const activeTrackObj = ALL_TRACKS.find(t => selectedTracks.length > 0 && t.id === selectedTracks[0]) || ALL_TRACKS[0] || null;
+
+  const tracksWithTelemetry = React.useMemo(() => {
+     return ALL_TRACKS.map(t => ({
+        ...t,
+        telemetry: getTrackTelemetry(t.nodes)
+     }));
+  }, [ALL_TRACKS]);
+
+  const sortedTracks = React.useMemo(() => {
+     return [...tracksWithTelemetry].sort((a, b) => {
+        let valA: any, valB: any;
+        if (sortBy === 'name') { valA = a.name; valB = b.name; }
+        else if (sortBy === 'lengthKm') { valA = parseFloat(a.telemetry.lengthKm); valB = parseFloat(b.telemetry.lengthKm); }
+        else { valA = a.telemetry[sortBy]; valB = b.telemetry[sortBy]; }
+        
+        if (valA < valB) return sortDir === 'asc' ? -1 : 1;
+        if (valA > valB) return sortDir === 'asc' ? 1 : -1;
+        return 0;
+     });
+  }, [tracksWithTelemetry, sortBy, sortDir]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -290,33 +312,47 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                          </button>
                       </div>
 
-                      <div className="flex-1 space-y-3">
-                         <div className="bg-[#1e1e24] border-l-4 border-[#E10600] p-3 flex flex-col sm:flex-row justify-between items-center rounded shadow-sm gap-4">
-                            <div className="flex flex-col flex-1">
-                               <span className="font-black text-white uppercase text-sm tracking-widest w-full truncate">{activeTrackObj?.name || 'SELECIONAR OU CRIAR PISTA ...'}</span>
-                               <span className="text-[10px] text-[#E10600] font-bold uppercase tracking-widest mt-1">Sessão Inaugural</span>
-                            </div>
-                            
-                            <div className="flex items-center gap-3 bg-black py-1 px-3 rounded border border-gray-700">
-                               <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">VOLTAS</label>
-                               <input 
-                                 type="number" 
-                                 min="1" 
-                                 max="99" 
-                                 value={totalLaps} 
-                                 onChange={(e) => setTotalLaps(parseInt(e.target.value) || 1)} 
-                                 className="bg-transparent text-[#E10600] font-black text-xl text-center w-12 outline-none" 
-                               />
-                            </div>
-                         </div>
-                         {/* Placeholder para futuras pistas no campeonato */}
+                      <div className="flex-1 space-y-3 max-h-[220px] overflow-y-auto pr-2">
+                        {selectedTracks.length > 0 ? (
+                           selectedTracks.map((trkId, idx) => {
+                              const trkObj = ALL_TRACKS.find(t => t.id === trkId) || ALL_TRACKS[0];
+                              if (!trkObj) return null;
+                              return (
+                                <div key={`${trkId}-${idx}`} className="bg-[#1e1e24] border-l-4 border-[#E10600] p-3 flex justify-between items-center rounded shadow-sm gap-4 mb-2 group">
+                                   <div className="flex flex-col flex-1">
+                                      <span className="font-black text-white uppercase text-sm tracking-widest w-full truncate">{trkObj.name}</span>
+                                      <span className="text-[10px] text-[#E10600] font-bold uppercase tracking-widest mt-1">Ronda {idx + 1}</span>
+                                   </div>
+                                   <button 
+                                     className="text-gray-500 hover:text-red-500 hidden group-hover:block transition p-2"
+                                     onClick={() => setSelectedTracks((prev: string[]) => prev.filter((_, i) => i !== idx))}
+                                     title="Remover da Playlist"
+                                   >
+                                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                   </button>
+                                </div>
+                              );
+                           })
+                        ) : (
+                           <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest text-center mt-6">Nenhuma pista selecionada...</div>
+                        )}
+
+                        <div className="bg-[#111116] border border-gray-800 p-3 flex justify-between items-center rounded shadow-sm gap-4 mt-4">
+                           <label className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">VOLTAS (POR RONDA)</label>
+                           <input 
+                             type="number" 
+                             min="1" 
+                             max="99" 
+                             value={totalLaps} 
+                             onChange={(e) => setTotalLaps(parseInt(e.target.value) || 1)} 
+                             className="bg-transparent text-[#E10600] font-black text-xl text-center w-12 outline-none" 
+                           />
+                        </div>
                       </div>
-
-
 
                       <div className="pt-4 mt-auto text-right border-t border-gray-800">
                          <span className="text-xs font-bold uppercase tracking-widest text-[#E10600]">
-                            Modo Atual: Corrida Única Standard
+                            Modo Atual: {selectedTracks.length > 1 ? 'Campeonato' : 'Corrida Única'}
                          </span>
                       </div>
                    </div>
@@ -457,15 +493,56 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                 )}
              </div>
              
+             {/* TRACKS FILTER BAR (Fallbacks if missing)*/}
+             {ALL_TRACKS.length > 0 && (
+                <div className="flex flex-wrap items-center gap-4 mb-6 bg-[#1a1a24] p-3 rounded-lg border border-gray-800">
+                   <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest ml-2">ORDENAR POR:</span>
+                   
+                   <select 
+                     value={sortBy} 
+                     onChange={(e) => setSortBy(e.target.value as any)}
+                     className="bg-black text-white text-xs font-bold uppercase tracking-widest border border-gray-700 rounded px-3 py-2 outline-none cursor-pointer"
+                   >
+                      <option value="name">Nome do Circuito</option>
+                      <option value="lengthKm">Extensão (KM)</option>
+                      <option value="topSpeedKmh">Top Speed (KM/H)</option>
+                      <option value="corners">Quantidade Curvas</option>
+                   </select>
+
+                   <button 
+                     onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+                     className="bg-black text-gray-400 hover:text-white border border-gray-700 rounded p-2 transition-colors flex items-center justify-center"
+                     title="Inverter Ordem"
+                   >
+                     {sortDir === 'asc' ? (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" /></svg>
+                     ) : (
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4" /></svg>
+                     )}
+                   </button>
+                   
+                   <div className="ml-auto text-[10px] text-[#E10600] font-bold uppercase tracking-widest bg-black px-3 py-2 rounded border border-[#E10600]/30 hidden sm:block">
+                      {selectedTracks.length} PISTA{selectedTracks.length !== 1 && 'S'} NA PLAYLIST
+                   </div>
+                </div>
+             )}
+
              {ALL_TRACKS.length > 0 ? (
                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-8 w-full">
-                 {ALL_TRACKS.map((t, i) => {
-                    const isSelected = selectedTrack === t.id;
+                 {sortedTracks.map((t, i) => {
+                    const isSelected = selectedTracks.includes(t.id);
+                    const playlistIndex = selectedTracks.indexOf(t.id);
                     const isSystemTrack = DEFAULT_TRACKS.some(sysT => sysT.id === t.id);
                     return (
                       <div 
                         key={t.id}
-                        onClick={() => setSelectedTrack(t.id)}
+                        onClick={() => {
+                           if (isSelected) {
+                              setSelectedTracks(prev => prev.filter(id => id !== t.id));
+                           } else {
+                              setSelectedTracks(prev => [...prev, t.id]);
+                           }
+                        }}
                         className={`cursor-pointer w-full flex flex-col h-full bg-[#15151e] rounded-2xl overflow-hidden transition-all duration-300 border-4 ${isSelected ? 'border-[#E10600] shadow-[0_15px_40px_rgba(225,6,0,0.4)] transform md:-translate-y-2 z-10 relative' : 'border-gray-800 opacity-95 hover:opacity-100 hover:border-gray-600 hover:-translate-y-1'}`}
                       >
                          <div className="p-6 border-b border-gray-800 bg-[#15151e] z-10 relative">
@@ -486,7 +563,11 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                              )}
 
                            <div className="flex justify-between items-center mb-3">
-                             <span className="text-[11px] font-black text-white uppercase tracking-widest block bg-[#E10600] rounded px-2 py-0.5">ROUND {i+1}</span>
+                             {isSelected ? (
+                                <span className="text-[11px] font-black text-white uppercase tracking-widest block bg-[#E10600] rounded px-2 py-0.5">RONDA {playlistIndex + 1} DA PLAYLIST</span>
+                             ) : (
+                                <span className="text-[11px] font-black text-gray-500 uppercase tracking-widest block bg-gray-900 rounded px-2 py-0.5 border border-gray-700">SEM SELEÇÃO</span>
+                             )}
                            </div>
                            <h3 className="text-2xl lg:text-3xl font-black uppercase text-white tracking-tighter leading-tight mb-1 break-words w-[80%]">{t.name}</h3>
                            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">{getCountry(t.name)}</p>

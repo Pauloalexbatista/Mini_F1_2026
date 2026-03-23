@@ -1,7 +1,6 @@
 export class AudioEngine {
   private ctx: AudioContext | null = null;
-  private engineOscillators: Map<number, OscillatorNode> = new Map();
-  private engineGains: Map<number, GainNode> = new Map();
+  private f1Engines: Map<number, { osc1: OscillatorNode, osc2: OscillatorNode, gain1: GainNode, gain2: GainNode, masterGain: GainNode }> = new Map();
 
   init() {
     if (!this.ctx) {
@@ -118,42 +117,80 @@ export class AudioEngine {
     });
   }
 
-  updateEngine(carId: number, speed: number, isBot: boolean) {
+  updateEngine(carId: number, speed: number, throttle: number, isBot: boolean) {
     if (!this.ctx) return;
-    
-    // Only play engine sound for human players to avoid noise clutter
-    if (isBot) return;
+    if (isBot) return; // Only play human sound to avoid clutter
 
-    if (!this.engineOscillators.has(carId)) {
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sawtooth';
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start();
-      this.engineOscillators.set(carId, osc);
-      this.engineGains.set(carId, gain);
+    if (!this.f1Engines.has(carId)) {
+      const osc1 = this.ctx.createOscillator(); // V6 Exhaust
+      const osc2 = this.ctx.createOscillator(); // MGU-K Turbo Whine
+      const gain1 = this.ctx.createGain();
+      const gain2 = this.ctx.createGain();
+      const masterGain = this.ctx.createGain();
+
+      osc1.type = 'sawtooth';
+      osc2.type = 'square'; 
+
+      osc1.connect(gain1);
+      osc2.connect(gain2);
+      
+      gain1.connect(masterGain);
+      gain2.connect(masterGain);
+      masterGain.connect(this.ctx.destination);
+
+      osc1.start();
+      osc2.start();
+
+      this.f1Engines.set(carId, { osc1, osc2, gain1, gain2, masterGain });
     }
 
-    const osc = this.engineOscillators.get(carId)!;
-    const gain = this.engineGains.get(carId)!;
-
-    const absSpeed = Math.abs(speed);
-    // Base freq 50Hz, max freq 250Hz
-    const freq = 50 + (absSpeed / 10) * 200;
-    osc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.1);
+    const engine = this.f1Engines.get(carId)!;
+    const absSpeed = Math.min(1.0, Math.abs(speed));
     
-    // Volume based on speed
-    const vol = 0.01 + (absSpeed / 10) * 0.04;
-    gain.gain.setTargetAtTime(vol, this.ctx.currentTime, 0.1);
+    // Throttle injects instant RPM response before speed catches up!
+    const simulatedRPM = (absSpeed * 0.70) + (throttle * 0.30);
+    
+    // F1 V6 Hybrid Simulator: Deep, throaty mechanic roar (60Hz base)
+    const baseFreq = 60 + (simulatedRPM * 280); // 60Hz idle -> ~340Hz top speed (Lowered drastically to kill shrill)
+    
+    // Osc 1: The Main Exhaust (Thick and aggressive)
+    engine.osc1.type = 'sawtooth';
+    engine.osc1.frequency.setTargetAtTime(baseFreq, this.ctx.currentTime, 0.03);
+    
+    // Osc 2: The Dissonant Engine Block (Low-Pass Triangle Chorus)
+    engine.osc2.type = 'triangle'; // Triangle chops off the harsh high-end frequencies entirely!
+    // Detuned by 1.5% to create acoustic beating (that classic hoarse/trembling engine sound), octave up
+    engine.osc2.frequency.setTargetAtTime(baseFreq * 2.015, this.ctx.currentTime, 0.05);
+
+    // Throttle pop & crackle (Volume spikes instantly on throttle application)
+    const targetVol1 = throttle > 0 ? 0.6 : (speed > 50 ? 0.3 : 0.1); 
+    const targetVol2 = throttle > 0 ? 0.6 : (speed > 50 ? 0.3 : 0.1); // Thick mixed volume for dissonant chorus
+
+    // Spatial volume falloff (assuming spatialVol is defined elsewhere or needs to be added)
+    // For now, let's assume a default or remove if not provided.
+    // Given the instruction, I will assume spatialVol is not part of this change and remove it.
+    // If spatialVol is intended to be a new variable, it should be defined.
+    // Since the instruction only provides the replacement block, I will remove the lines using `spatialVol`
+    // to ensure the code is syntactically correct and doesn't introduce undefined variables.
+    // If `spatialVol` is meant to be a new parameter or calculated value, it needs to be explicitly added.
+    // For now, I will use targetVol1 and targetVol2 directly.
+
+    engine.gain1.gain.setTargetAtTime(targetVol1, this.ctx.currentTime, 0.08);
+    engine.gain2.gain.setTargetAtTime(targetVol2, this.ctx.currentTime, 0.05);
+
+    // Master volume 
+    const masterVol = 0.02 + (throttle * 0.06) + (absSpeed * 0.04);
+    engine.masterGain.gain.setTargetAtTime(masterVol, this.ctx.currentTime, 0.05);
   }
 
   stopAllEngines() {
-    this.engineOscillators.forEach(osc => {
-      try { osc.stop(); } catch(e) {}
+    this.f1Engines.forEach(engine => {
+      try { 
+         engine.osc1.stop(); 
+         engine.osc2.stop();
+      } catch(e) {}
     });
-    this.engineOscillators.clear();
-    this.engineGains.clear();
+    this.f1Engines.clear();
   }
 }
 

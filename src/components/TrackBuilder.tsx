@@ -209,24 +209,24 @@ export const TrackBuilder: React.FC<TrackBuilderProps> = ({ onExit, onTestTrack 
 
       ctx.lineJoin = 'round';
       ctx.lineCap = 'round';
-      const baseMainW = 250 / 15.0;
 
-      // Layer 1: Muros de Betão Exteriores (Esganados, City Circuit limit!)
+      // Layer 1: Muros de Betão Exteriores Mínimos (Segurança Máxima Muro-a-Muro: 325px Reais)
+      // Escala visual perfeita para o Jogador ter noção do espaço matemático de colisão do jogo
       traceMain();
       ctx.strokeStyle = '#FFFFFF';
-      ctx.lineWidth = baseMainW * 1.3;
+      ctx.lineWidth = 325 / 15.0; 
       ctx.stroke();
 
-      // Layer 2: Zebras Interiores (Apenas Branco para contraste Studio)
+      // Layer 2: Limite das Bermas Brancas Obrigatórias (250px asfalto + 30px + 30px = 310px Reais)
       traceMain();
-      ctx.strokeStyle = '#D1D5DB';
-      ctx.lineWidth = baseMainW * 1.2;
+      ctx.strokeStyle = '#ef4444'; // Pintado de vermelho suave no Studio para o Piloto ver a diferença nítida entre Berma e Muro
+      ctx.lineWidth = 310 / 15.0;
       ctx.stroke();
 
-      // Layer 3: Asfalto
+      // Layer 3: Asfalto Puro (Largura da Via Original: 250px)
       traceMain();
       ctx.strokeStyle = activeLayer === 'main' ? '#475569' : '#1e293b';
-      ctx.lineWidth = baseMainW;
+      ctx.lineWidth = 250 / 15.0;
       ctx.stroke();
 
       mainPoints.forEach((p, index) => {

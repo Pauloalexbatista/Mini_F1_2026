@@ -46,8 +46,13 @@ export function getSetupFromSpeed(speedKmh: number): CarSetupStats {
   // Grip: 160km/h -> 1.60 | 360km/h -> 1.00
   const gripMultiplier = 1.60 - (normalized * 0.60);
   
-  // Drag: 160km/h -> 1.50 | 360km/h -> 0.80
-  const dragMultiplier = 1.50 - (normalized * 0.70);
+  // Drag Perfeito (Dynamic Aero Equilibrium)
+  // EnginePower é 400. Se a Força de Arrasto (Drag) igualar a Força do Motor no Top Speed,
+  // a aceleração chega perfeitamente a 0 no ecrã exatamente a essa velocidade.
+  // Drag = dragRate * (VelocidadePixels)^2
+  // dragMultiplier = (EnginePower / (VelocidadePixels)^2) * 1000
+  const vMaxPixels = clampedSpeed / 0.36;
+  const dragMultiplier = 400000 / (vMaxPixels * vMaxPixels);
   
   return {
     maxSpeedKmh: clampedSpeed,

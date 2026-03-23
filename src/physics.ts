@@ -71,7 +71,7 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
   }
 
   if (surface === 'GRASS') {
-    gripPenalty *= 0.35; accelPenalty *= 0.6; dragPenalty *= 2.0; maxSpeedMod *= 0.4;
+    gripPenalty *= 0.55; accelPenalty *= 0.6; dragPenalty *= 2.0; maxSpeedMod *= 0.4; // Reduzido o castigo (era 0.3). Permite aos jogadores virarem o volante para se salvarem.
   } else if (surface === 'CURB_APEX') {
     gripPenalty *= 0.6; accelPenalty *= 0.6; dragPenalty *= 3.5; maxSpeedMod *= 0.7; // 30% penalty
   } else if (surface === 'CURB_WIDE') {
@@ -100,7 +100,8 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
     tractionAccel = -car.brake * car.enginePower * 0.2; 
   }
 
-  const dragRate = 0.0005 * dragPenalty;
+  const baseDragRate = car.setupProfile ? (car.setupProfile.dragMultiplier / 1000) : 0.0005;
+  const dragRate = baseDragRate * dragPenalty;
   const rollingResist = 5.0 * dragPenalty;
   const resistanceAccel = -(dragRate * forwardVel * Math.abs(forwardVel) + rollingResist * Math.sign(forwardVel));
   let longAccel = tractionAccel + resistanceAccel;
@@ -152,8 +153,8 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
   }
 
   // 6. Pirâmide de Desgaste (User F1 Tier System - V1.1 Re-Calibrado)
-  // Valores calibrados DILUIDOS para Pneus F1 aguentarem rigorosamente 6 a 7 Voltas na Oval!
-  let wearRate = 0.2; // NÍVEL I: Reta (0.2/sec em vez de 0.6/sec)
+  // Valores calibrados SUPER DILUIDOS para Pneus F1 aguentarem cerca de 10 Voltas antes da Box (Pit aos 30%)!
+  let wearRate = 0.05; // NÍVEL I: Reta (0.05/sec, dura imenso)
   car.isSkidding = false;
   
   if (car.setupProfile) {
@@ -161,17 +162,20 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
     const curveWear = scrubFactor * car.setupProfile.gripMultiplier * 0.26;
     
     if (curveWear > 0.15) {
-       wearRate += 0.4; // NÍVEL III: Curvas (0.4 extra/sec)
-       if (curveWear > 0.4) car.isSkidding = true; 
+       wearRate += 0.05; // NÍVEL III: Curvas (0.05 extra/sec)
+       if (curveWear > 0.4) {
+           wearRate += 0.05; // Extra penalização se derrapar à bruta
+           car.isSkidding = true; 
+       }
     }
   }
   
   if (surface === 'GRASS') {
-      wearRate += 0.2; // NÍVEL II: Relva
+      wearRate += 0.1; // NÍVEL II: Relva
   }
   
   if (car.brake > 0.6) {
-      wearRate += 0.6; // NÍVEL IV: Travagem a fundo
+      wearRate += 0.15; // NÍVEL IV: Travagem a fundo
       car.isSkidding = true; 
   }
   

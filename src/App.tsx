@@ -80,7 +80,7 @@ export default function App() {
                    )
                 }));
                 setDbTracks(parsedTracks);
-                setSelectedTrack(parsedTracks[0].id);
+                setSelectedTracks([parsedTracks[0].id]);
              }
           } catch(e) { console.error("Track Fetch", e); }
           
@@ -95,7 +95,9 @@ export default function App() {
     checkAuth();
   }, []);
   const [playerCount, setPlayerCount] = useState(1);
-  const [selectedTrack, setSelectedTrack] = useState('');
+  const [selectedTracks, setSelectedTracks] = useState<string[]>([]);
+  const [currentChampionshipRaceIndex, setCurrentChampionshipRaceIndex] = useState(0);
+  const [championshipStandings, setChampionshipStandings] = useState<Record<number, number>>({});
   const [totalLaps, setTotalLaps] = useState(3);
   
   const [players, setPlayers] = useState<PlayerConfig[]>(
@@ -162,8 +164,27 @@ export default function App() {
     }
   };
 
-  const handleBackToMenu = () => {
-    setAppState('menu');
+  const handleBackToMenu = (results?: any[]) => {
+      if (results && results.length > 0) {
+          const pointsSystem = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+          const newStandings = { ...championshipStandings };
+          results.forEach((r, i) => {
+              const points = pointsSystem[i] || 0;
+              newStandings[r.playerId] = (newStandings[r.playerId] || 0) + points;
+          });
+          setChampionshipStandings(newStandings);
+
+          if (currentChampionshipRaceIndex + 1 < selectedTracks.length) {
+              setCurrentChampionshipRaceIndex(prev => prev + 1);
+              return; // Avança logo para a pista seguinte sem sair
+          } else {
+              setCurrentChampionshipRaceIndex(0);
+              setAppState('menu');
+          }
+      } else {
+          setAppState('menu');
+          setCurrentChampionshipRaceIndex(0);
+      }
   };
 
   const handleTestTrack = async (customTrack: TrackDef) => {
@@ -193,7 +214,7 @@ export default function App() {
        } else {
            setDbTracks([...dbTracks, customTrack]);
        }
-       setSelectedTrack(customTrack.id);
+       setSelectedTracks([customTrack.id]);
        setAppState('menu');
     } catch(e) {
        console.error("Error saving track to cloud", e);
@@ -212,8 +233,8 @@ export default function App() {
          if (res.ok) {
              const newTracks = dbTracks.filter(t => t.id !== id);
              setDbTracks(newTracks);
-             if (selectedTrack === id) {
-                 setSelectedTrack(newTracks.length > 0 ? newTracks[0].id : '');
+             if (selectedTracks.includes(id)) {
+                 setSelectedTracks(newTracks.length > 0 ? [newTracks[0].id] : []);
              }
          } else {
              alert("Erro: Apenas Pilotos com estatuto de ADMIN podem apagar pistas da Cloud.");
@@ -254,6 +275,28 @@ export default function App() {
       });
   }
 
+  // Preenchimento de IA Bots para manter a Grelha Cheia (10 Carros)
+  if (activePlayers.length > 0 && activePlayers.length < 10) {
+      const neededBots = 10 - activePlayers.length;
+      let botIndexOffset = activePlayers.length;
+      for (let i = 0; i < neededBots; i++) {
+          const liveryIndex = (botIndexOffset + i) % TEAM_LIVERIES.length;
+          const botLivery = TEAM_LIVERIES[liveryIndex];
+          activePlayers.push({
+             id: 10 + i, // IDs acima de 10 para evitar colisões
+             isBot: true,
+             controls: { up: '', down: '', left: '', right: '' },
+             driverName: 'AI ' + botLivery.d2,
+             teamName: botLivery.name,
+             color: botLivery.p,
+             color2: botLivery.s,
+             difficulty: 0.90 + (Math.random() * 0.1), // Difficulty 0.90 - 1.00
+             socketId: `bot_${i}`,
+             isReady: true 
+          });
+      }
+  }
+
   if (appState === 'builder') {
     return <TrackBuilder onExit={() => setAppState('menu')} onTestTrack={handleTestTrack} />;
   }
@@ -281,8 +324,8 @@ export default function App() {
           players={activePlayers} 
           playerCount={playerCount}
           setPlayerCount={setPlayerCount}
-          selectedTrack={selectedTrack}
-          setSelectedTrack={setSelectedTrack}
+          selectedTracks={selectedTracks}
+          setSelectedTracks={setSelectedTracks}
           totalLaps={totalLaps}
           setTotalLaps={setTotalLaps}
           onStart={handleStartGame} 
@@ -295,8 +338,9 @@ export default function App() {
       )}
       {appState === 'playing' && (
         <Game 
+          key={`race-${currentChampionshipRaceIndex}`}
           players={activePlayers} 
-          track={dbTracks.find(t => t.id === selectedTrack)!}
+          track={dbTracks.find(t => t.id === selectedTracks[currentChampionshipRaceIndex])!}
           totalLaps={totalLaps}
           onBackToMenu={handleBackToMenu} 
         />
