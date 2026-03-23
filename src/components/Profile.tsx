@@ -41,7 +41,7 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
         e.preventDefault();
         const action = activeKeyConfig.action;
         const newPlayer = { ...players[0] };
-        if (!newPlayer.controls) newPlayer.controls = { up: '', down: '', left: '', right: '' };
+        if (!newPlayer.controls) newPlayer.controls = { up: '', down: '', left: '', right: '', camera: 'KeyC' };
         newPlayer.controls[action] = e.code;
         onUpdatePlayer(0, newPlayer);
         setActiveKeyConfig(null);
@@ -111,6 +111,15 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
 
   const selectedTeam = TEAM_LIVERIES[selectedCarId - 1] || TEAM_LIVERIES[0];
 
+  const formatTime = (ms: number) => {
+    if (ms === Infinity) return '---';
+    const totalSeconds = Math.floor(ms / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    const milli = Math.floor((ms % 1000) / 10);
+    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${milli.toString().padStart(2,'0')}`;
+  };
+
   return (
     <div className="w-full min-h-screen bg-[#15151e] text-white p-8 overflow-y-auto">
       <div className="max-w-4xl mx-auto">
@@ -172,6 +181,7 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
                   {renderKeyButton('down', 'Travar')}
                   {renderKeyButton('left', 'Esquerda')}
                   {renderKeyButton('right', 'Direita')}
+                  {renderKeyButton('camera', 'Modo Câmara')}
                 </div>
              </div>
 
@@ -200,7 +210,7 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
                       </div>
                       <div className="text-right">
                         <span className="block text-[10px] text-[#E10600] font-bold uppercase tracking-widest">Melhor Volta</span>
-                        <span className="block text-lg font-mono text-yellow-400">{(rec.personal_best / 1000).toFixed(3)}s</span>
+                        <span className="block text-lg font-mono text-yellow-400">{formatTime(rec.personal_best)}</span>
                       </div>
                    </div>
                  ))}

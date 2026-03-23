@@ -31,6 +31,9 @@ export interface CarPhysics {
   laps: number;
   currentWaypoint: number;
   finishTime?: number | null;
+  currentLapStartTime?: number;
+  lastLapTime?: number;
+  bestLapTime?: number;
   controls?: { up: string, down: string, left: string, right: string };
   setupProfile?: CarSetupStats;
   isSkidding?: boolean;
@@ -104,9 +107,10 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
 
   // 3. Apply Steering and Lateral Grip
   if (Math.abs(forwardVel) > 10) {
-    // Dynamic Steering Limit
-    // Base muito mais apertada (50px) para permitir ganchos a baixa velocidade! E expande mais depressa a alta velocidade (1.2)
-    const turnRadius = 50 + (Math.abs(forwardVel) * 1.2); 
+    // Menos grip (Extrema Velocidade) = O raio de viragem explode com a velocidade.
+    // Mais grip (Mónaco) = O raio de viragem mantém-se apertado mesmo a alta velocidade.
+    const speedFactor = 1.8 / gripPenalty; // Monza -> 1.8, Monaco -> ~1.12
+    const turnRadius = 40 + (Math.abs(forwardVel) * speedFactor); 
     car.angularVelocity = (forwardVel / turnRadius) * car.steer * gripPenalty;
   } else {
     // Se estivermos quase parados, rodamos fisicamente o carro quase no mesmo sítio

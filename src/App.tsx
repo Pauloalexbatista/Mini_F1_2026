@@ -3,9 +3,10 @@ import Menu from './components/Menu';
 import Game from './components/Game';
 import { Auth } from './components/Auth';
 import { Profile } from './components/Profile';
-import { GameState, PlayerConfig, CarSetupType } from './types';
+import { GameState, PlayerConfig } from './types';
 import { TRACKS, TrackDef, parseStudioToNodes, parseStudioControlPoints, fuseAndComputePitLane } from './tracks';
 import { TrackBuilder } from './components/TrackBuilder';
+import { socket } from './socket';
 
 export const TEAM_LIVERIES = [
   { p: '#DC0000', s: '#000000', name: 'Ferrari', d1: 'Leclerc', d2: 'Hamilton' },
@@ -34,6 +35,7 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [dbTracks, setDbTracks] = useState<TrackDef[]>([]);
+  const [onlineLobby, setOnlineLobby] = useState<any[]>([]);
   
   const [appState, setAppState] = useState<'menu' | 'playing' | 'builder'>('menu');
 
@@ -95,7 +97,6 @@ export default function App() {
   const [playerCount, setPlayerCount] = useState(1);
   const [selectedTrack, setSelectedTrack] = useState('');
   const [totalLaps, setTotalLaps] = useState(3);
-  const [selectedSetup, setSelectedSetup] = useState<CarSetupType>('BALANCED');
   
   const [players, setPlayers] = useState<PlayerConfig[]>(
     Array.from({ length: 6 }).map((_, i) => ({
@@ -110,6 +111,43 @@ export default function App() {
     }))
   );
 
+  useEffect(() => {
+     if (user && appState === 'menu') {
+        const p1Livery = TEAM_LIVERIES[user.selected_car_id - 1] || TEAM_LIVERIES[0];
+        
+        const joinData = {
+            userId: user.id || 1,
+            driverName: user.pilot_name || user.username || 'PILOTO 1',
+            teamName: p1Livery.name,
+            color: p1Livery.p,
+            color2: p1Livery.s,
+            controls: players[0]?.controls || { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' }
+        };
+
+        socket.connect();
+        socket.emit('join_lobby', joinData);
+
+        const onLobbyState = (state: any[]) => {
+            setOnlineLobby(state);
+        };
+
+        const onStartRace = () => {
+            if (dbTracks.length > 0) {
+               setAppState('playing');
+            }
+        };
+
+        socket.on('lobby_state', onLobbyState);
+        socket.on('start_race', onStartRace);
+
+        return () => {
+            socket.off('lobby_state', onLobbyState);
+            socket.off('start_race', onStartRace);
+            socket.disconnect();
+        };
+     }
+  }, [user, appState, players, dbTracks]);
+
   const handleUpdatePlayer = (index: number, config: PlayerConfig) => {
     const newPlayers = [...players];
     newPlayers[index] = config;
@@ -118,7 +156,7 @@ export default function App() {
 
   const handleStartGame = () => {
     if (dbTracks.length > 0) {
-        setAppState('playing');
+        socket.emit('start_race');
     } else {
         alert("Paddock Vazio! Entre no Track Builder Studio e construa uma pista primeiro.");
     }
@@ -185,64 +223,36 @@ export default function App() {
       }
   };
 
-  // Build the 11 car F1 Grid (1 per team as requested)
+  // Reconstrução da grelha de Partida usando estritamente o Lobby Online (Sockets)
   let activePlayers: PlayerConfig[] = [];
-  let carId = 1;
-  TEAM_LIVERIES.forEach(team => {
+  
+  if (onlineLobby.length > 0) {
+      activePlayers = onlineLobby.map((p, i) => ({
+          id: p.socketId, // Maintain socket consistency for multiplayer targeting
+          isBot: false,
+          controls: p.controls,
+          driverName: p.driverName,
+          teamName: p.teamName,
+          color: p.color,
+          color2: p.color2,
+          difficulty: 1.0,
+          socketId: p.socketId,
+          isReady: p.isReady
+      }));
+  } else if (user) {
+      // Fallback local se estiver a ligar
+      const p1Livery = TEAM_LIVERIES[user.selected_car_id - 1] || TEAM_LIVERIES[0];
       activePlayers.push({
-        id: carId++, color: team.p, color2: team.s, teamName: team.name, driverName: team.d1,
-        isBot: true, difficulty: 0.65 + Math.random()*0.35, controls: undefined
+           id: 1,
+           isBot: false,
+           controls: players[0]?.controls || { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' },
+           driverName: user.pilot_name || players[0]?.driverName || 'PILOTO 1',
+           teamName: p1Livery.name,
+           color: p1Livery.p,
+           color2: p1Livery.s,
+           difficulty: 1.0
       });
-  });
-
-  // Overwrite humans onto the Grid!
-  // Player 1 comes from the Cloud DB User Config!
-  let uiPlayers = [...players];
-  if (playerCount > 0 && user) {
-     const p1Livery = TEAM_LIVERIES[user.selected_car_id - 1] || TEAM_LIVERIES[0];
-     
-     // Build Physics Entity Config
-     const p1Config = activePlayers[user.selected_car_id - 1] || activePlayers[0];
-     p1Config.isBot = false;
-     p1Config.controls = players[0]?.controls || { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
-     p1Config.driverName = user.pilot_name || players[0]?.driverName || 'PILOTO 1';
-     p1Config.teamName = p1Livery.name;
-     p1Config.color = p1Livery.p;
-     p1Config.color2 = p1Livery.s;
-
-     // Strict declarative clone for the Menu overlay
-     uiPlayers[0] = { 
-        ...uiPlayers[0], 
-        driverName: p1Config.driverName, 
-        teamName: p1Config.teamName, 
-        color: p1Config.color, 
-        color2: p1Config.color2 
-     };
   }
-
-  // Handle Player 2+ locally (split screen guests)
-  for(let i=1; i<playerCount; i++) {
-     if (activePlayers[i]) {
-         activePlayers[i].isBot = false;
-         activePlayers[i].controls = players[i]?.controls || { up: '', down: '', left: '', right: '' };
-         activePlayers[i].driverName = players[i]?.driverName || `CONVIDADO ${i}`;
-     }
-  }
-
-  // Ensure uiPlayers mirrors the active human state for the Lobby mapping
-  for(let i=1; i<playerCount; i++) {
-     if (!uiPlayers[i]) {
-        uiPlayers[i] = activePlayers[i];
-     } else {
-        uiPlayers[i].driverName = activePlayers[i].driverName;
-     }
-  }
-
-  // Sort humans to the front of the grid for now
-  activePlayers = [
-     ...activePlayers.filter(p => !p.isBot),
-     ...activePlayers.filter(p => p.isBot)
-  ];
 
   if (appState === 'builder') {
     return <TrackBuilder onExit={() => setAppState('menu')} onTestTrack={handleTestTrack} />;
@@ -268,7 +278,7 @@ export default function App() {
       {appState === 'menu' && (
         <Menu 
           tracks={dbTracks}
-          players={uiPlayers} 
+          players={activePlayers} 
           playerCount={playerCount}
           setPlayerCount={setPlayerCount}
           selectedTrack={selectedTrack}

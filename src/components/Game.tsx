@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { PlayerConfig, CarSetupType, SETUP_CONFIGS } from '../types';
+import { PlayerConfig, getSetupFromSpeed } from '../types';
 import { TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { audio } from '../audio';
 import { updateCarPhysics, CarPhysics } from '../physics';
@@ -12,31 +12,29 @@ interface GameProps {
   onBackToMenu: () => void;
 }
 
-const SETUP_CARDS = [
-  { id: 'LOW_DF' as CarSetupType, name: 'FULL SPEED', speed: '360 KM/H', grip: 'Normal', color: 'border-blue-500', desc: 'Aero Mínima. Feito para voar nas retas longas mas um diabo para curvar a alta velocidade.' },
-  { id: 'BALANCED' as CarSetupType, name: 'BALANCED', speed: '260 KM/H', grip: 'Aumentado', color: 'border-white', desc: 'O Setup Standard Misto. Balanço matemático entre velocidade de ponta e agressividade em curva.' },
-  { id: 'HIGH_DF' as CarSetupType, name: 'FULL CURVE', speed: '160 KM/H', grip: 'Extremo', color: 'border-[#E10600]', desc: 'Asas no ângulo máximo (+60% Downforce Lateral). Devora ganchos fechados sem pisar o travão.' }
-];
-
 let GAME_WIDTH = 1280;
 let GAME_HEIGHT = 720;
 
 export default function Game({ players, track, totalLaps, onBackToMenu }: GameProps) {
   const [isSetupPhase, setIsSetupPhase] = useState(true);
-  const [playerSetups, setPlayerSetups] = useState<Record<number, CarSetupType>>({});
+  const [playerSetups, setPlayerSetups] = useState<Record<number, number>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hudLeftRef = useRef<HTMLCanvasElement>(null);
   const hudRightRef = useRef<HTMLCanvasElement>(null);
 
   const [raceFinished, setRaceFinished] = useState(false);
-  const [startSequence, setStartSequence] = useState(0); 
+  const [startSequence, setStartSequence] = useState(isSetupPhase ? 0 : 1); 
   const [, setForceRender] = useState(0);
+  const [cameraModeUI, setCameraModeUI] = useState<'CENTRAL' | 'DYNAMIC' | 'QUADRANTS'>('CENTRAL');
   
   const carsRef = useRef<CarPhysics[]>([]);
   const keysRef = useRef<{ [key: string]: boolean }>({});
   const startTimeRef = useRef<number>(0);
   const firstFinishTimeRef = useRef<number | null>(null);
+  const allHumansFinishedTimeRef = useRef<number | null>(null);
   const cameraRef = useRef<{x: number, y: number, scale: number} | null>(null);
+  const cameraModeRef = useRef<'CENTRAL' | 'DYNAMIC' | 'QUADRANTS'>('CENTRAL');
+  const quadOffsetRef = useRef<{x: number, y: number}>({x: 0, y: 0});
   const skidMarksRef = useRef<{x: number, y: number, a: number, w: number}[]>([]);
   
   const rawTrack = track;
@@ -46,6 +44,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
   useEffect(() => {
     audio.init();
     firstFinishTimeRef.current = null;
+    allHumansFinishedTimeRef.current = null;
     
     // Superior Grid Generation logic: place them precisely on Spline Points backwards from Start Line
     carsRef.current = players.map((p, index) => {
@@ -67,13 +66,12 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
         }
       }
       
-      const setupKeys: CarSetupType[] = ['LOW_DF', 'BALANCED', 'HIGH_DF'];
-      const botSetupChoice = setupKeys[Math.floor(Math.random() * setupKeys.length)];
+      const botSpeed = 160 + Math.floor(Math.random() * 21) * 10;
       
-      // Default Setup for humans if not chosen
-      let finalSetup: CarSetupType = 'BALANCED';
-      if (!p.isBot && playerSetups[p.id]) finalSetup = playerSetups[p.id];
-      const assignedSetupProfile = p.isBot ? SETUP_CONFIGS[botSetupChoice] : SETUP_CONFIGS[finalSetup];
+      // Default Setup Top Speed for humans
+      let finalSpeed = 260;
+      if (!p.isBot && playerSetups[p.id]) finalSpeed = playerSetups[p.id];
+      const assignedSetupProfile = getSetupFromSpeed(p.isBot ? botSpeed : finalSpeed);
 
       const spawnNode = spline[computedIndex];
       const nextSpawnNode = spline[(computedIndex + 1) % spline.length];
@@ -96,7 +94,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
         steer: 0,
         maxSpeed: 800 + (p.isBot ? (p.difficulty || 0.8) * 100 : 200),
         enginePower: 350 + (p.isBot ? (p.difficulty || 0.8) * 50 : 150), // Smooth 0-1000px in ~2s
-        brakingPower: 700, // Reduzido de 1200 para travar suavemente e não como um rochedo
+        brakingPower: 400, // Reduzido para 400 para uma travagem progressiva F1
         grip: 1.0 + (p.isBot ? (p.difficulty || 0.8) * 0.1 : 0.2),
         mass: 800,
         color: p.color,
@@ -131,6 +129,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
     } else if (startSequence === 3) {
       timer = setTimeout(() => { 
         startTimeRef.current = Date.now(); 
+        carsRef.current.forEach(c => c.currentLapStartTime = startTimeRef.current);
         setStartSequence(4); 
       }, 1000);
     }
@@ -139,12 +138,21 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
 
   // Keys
   useEffect(() => {
-    const down = (e: KeyboardEvent) => { keysRef.current[e.code] = true; };
+    const down = (e: KeyboardEvent) => { 
+       keysRef.current[e.code] = true;
+       
+       const cameraKeys = players.filter(p => !p.isBot).map(p => p.controls?.camera || 'KeyC');
+       if (cameraKeys.includes(e.code)) {
+          const next = cameraModeRef.current === 'CENTRAL' ? 'DYNAMIC' : (cameraModeRef.current === 'DYNAMIC' ? 'QUADRANTS' : 'CENTRAL');
+          cameraModeRef.current = next;
+          setCameraModeUI(next);
+       }
+    };
     const up = (e: KeyboardEvent) => { keysRef.current[e.code] = false; };
     window.addEventListener('keydown', down);
     window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
-  }, []);
+  }, [players]);
 
   const formatTime = (ms: number) => {
     if (ms === Infinity) return '---';
@@ -570,8 +578,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
           }
 
           // Robust Lap counting logic
-          // Only increment tracking waypoint if moving forwards linearly
-          if (closestIndex > car.currentWaypoint && closestIndex < car.currentWaypoint + 100) {
+          // Only increment tracking waypoint if moving forwards linearly (increased to 400 for pit-lane skips)
+          if (closestIndex > car.currentWaypoint && closestIndex < car.currentWaypoint + 400) {
              car.currentWaypoint = closestIndex;
           }
           
@@ -579,6 +587,20 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
           if (closestIndex < 20 && car.currentWaypoint > spline.length * 0.8) {
              car.laps++;
              car.currentWaypoint = 0; // reset
+             
+             // Track Lap Times
+             if (car.currentLapStartTime) {
+                const lapTime = now - car.currentLapStartTime;
+                car.lastLapTime = lapTime;
+                if (!car.bestLapTime || lapTime < car.bestLapTime) car.bestLapTime = lapTime;
+                
+                const lastEl = document.getElementById(`hud-last-${car.id}`);
+                if (lastEl) lastEl.innerText = formatTime(lapTime);
+                const bestEl = document.getElementById(`hud-best-${car.id}`);
+                if (bestEl) bestEl.innerText = formatTime(car.bestLapTime);
+             }
+             car.currentLapStartTime = now;
+
              if (car.laps >= totalLaps && totalLaps > 0) {
                if (car.finishTime === null || car.finishTime === undefined) {
                    car.finishTime = now - startTimeRef.current;
@@ -598,10 +620,13 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
 
         const activeHumanCars = carsRef.current.filter(c => !c.isBot);
         const allHumansFinished = activeHumanCars.length > 0 && activeHumanCars.every(c => c.finishTime !== null || c.givenUp);
-        const timeoutReached = firstFinishTimeRef.current !== null && (now - firstFinishTimeRef.current > 15000);
 
-        if (allHumansFinished || timeoutReached) {
-            setRaceFinished(true);
+        if (allHumansFinished) {
+            if (allHumansFinishedTimeRef.current === null) {
+                allHumansFinishedTimeRef.current = now;
+            } else if (now - allHumansFinishedTimeRef.current > 5000) {
+                setRaceFinished(true);
+            }
         }
       } // end if race started
       } catch (e: any) {
@@ -626,10 +651,45 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
       // Amplia a câmara apenas ANTES do 2º Beep e volta a subir para os "Céus" quando a corrida terminar para os humanos!
       if (startSequence < 2 || raceFinished) {
          targetScale = 0.08; // High-altitude orbit view
+      } else if (cameraModeRef.current === 'QUADRANTS') {
+         targetScale = baseScale; // Use normal zoom dynamically
       }
 
-      if (!cameraRef.current) cameraRef.current = { x: mainCar.x, y: mainCar.y, scale: 0.08 };
+      let targetCamX = mainCar.x;
+      let targetCamY = mainCar.y;
+      
+      let quadScreenOffsetX = 0;
+      let quadScreenOffsetY = 0;
+
+      if (cameraModeRef.current === 'DYNAMIC' && startSequence >= 4) {
+          // Look ahead based on velocity vector for smoother turns, providing realistic anticipation
+          const lookAheadX = mainCar.vx * 0.6; // 0.6 seconds physical look-ahead
+          const lookAheadY = mainCar.vy * 0.6;
+          targetCamX += lookAheadX;
+          targetCamY += lookAheadY;
+      } else if (cameraModeRef.current === 'QUADRANTS' && startSequence >= 4) {
+          // Quadrants Mode: The car is pushed to the opposite screen quadrant of its travel direction!
+          // So if car goes UP-LEFT (vx<0, vy<0), it sits in BOTTOM-RIGHT (Quad 2:2) to provide max visibility ahead (Top-Left).
+          const offsetW = GAME_WIDTH * 0.25; // 25% screen offset 
+          const offsetH = GAME_HEIGHT * 0.25;
+          
+          if (mainCar.vx > 20) quadScreenOffsetX = -offsetW;
+          else if (mainCar.vx < -20) quadScreenOffsetX = offsetW;
+
+          if (mainCar.vy > 20) quadScreenOffsetY = -offsetH;
+          else if (mainCar.vy < -20) quadScreenOffsetY = offsetH;
+      }
+
+      if (!cameraRef.current) cameraRef.current = { x: targetCamX, y: targetCamY, scale: 0.08 };
+      
+      // Smooth fluid tracking for car target
+      cameraRef.current.x += (targetCamX - cameraRef.current.x) * 0.08;
+      cameraRef.current.y += (targetCamY - cameraRef.current.y) * 0.08;
       cameraRef.current.scale += (targetScale - cameraRef.current.scale) * 0.02;
+
+      // Smooth pan for the Quadrant Screen Offset!
+      quadOffsetRef.current.x += (quadScreenOffsetX - quadOffsetRef.current.x) * 0.04;
+      quadOffsetRef.current.y += (quadScreenOffsetY - quadOffsetRef.current.y) * 0.04;
 
       // SUPER AGGRESSIVE HARD RESET
       // Fallback natively to setTransform(1,0,0,1,0,0) in case resetTransform fails silently in React Canvas wrappers
@@ -643,14 +703,10 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
       ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
       ctx.save();
-      
-      const camX = mainCar.x;
-      const camY = mainCar.y;
-      const camScale = cameraRef.current.scale;
 
-      ctx.translate(GAME_WIDTH/2, GAME_HEIGHT/2);
-      ctx.scale(camScale, camScale);
-      ctx.translate(-camX, -camY);
+      ctx.translate(GAME_WIDTH/2 + quadOffsetRef.current.x, GAME_HEIGHT/2 + quadOffsetRef.current.y);
+      ctx.scale(cameraRef.current.scale, cameraRef.current.scale);
+      ctx.translate(-cameraRef.current.x, -cameraRef.current.y);
 
       // Draw map mathematically in real-time, preventing DOM memory limits on ultra-large splines
       drawTrack(ctx, spline, pitSpline, false);
@@ -756,6 +812,21 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
         }
       }
 
+      // Update HUD DOM dynamically
+      players.filter(p => !p.isBot).forEach(p => {
+         const car = carsRef.current.find(c => c.id === p.id);
+         if (!car) return;
+         const timeEl = document.getElementById(`hud-time-${car.id}`);
+         if (timeEl) {
+            const currentLapTime = Date.now() - (car.currentLapStartTime || startTimeRef.current || Date.now());
+            timeEl.innerText = formatTime(currentLapTime);
+         }
+         const lapEl = document.getElementById(`hud-lap-${car.id}`);
+         if (lapEl) {
+            lapEl.innerText = `${Math.max(1, car.laps + 1)}/${totalLaps}`;
+         }
+      });
+
       animationFrameId = requestAnimationFrame(update);
     };
 
@@ -820,32 +891,69 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
                         </div>
                      </div>
                      
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {SETUP_CARDS.map(s => {
-                           const setupType = s.id;
-                           const isSelected = (playerSetups[p.id] || 'BALANCED') === setupType;
+                     <div className="w-full bg-[#111116] rounded-lg p-6 border border-gray-800 relative shadow-inner">
+                        {(() => {
+                           const currentSpeed = playerSetups[p.id] || 260;
+                           const currentSetup = getSetupFromSpeed(currentSpeed);
+                           
+                           // Setup Descriptor
+                           let setupName = 'BALANCED';
+                           let setupColor = 'text-white';
+                           if (currentSpeed >= 320) { setupName = 'FULL SPEED (MONZA)'; setupColor = 'text-blue-400'; }
+                           else if (currentSpeed <= 200) { setupName = 'FULL CURVE (MÓNACO)'; setupColor = 'text-[#E10600]'; }
+                           
                            return (
-                             <button
-                               key={setupType}
-                               onClick={() => setPlayerSetups(prev => ({ ...prev, [p.id]: setupType }))}
-                               className={`w-full py-4 px-5 flex flex-col justify-between items-start rounded-lg border-2 transition-all font-bold tracking-widest text-left ${isSelected ? 'border-white bg-[#1a1a24] text-white shadow-[0_0_20px_rgba(255,255,255,0.15)] transform scale-[1.02]' : 'border-gray-800 bg-black/40 text-gray-500 hover:border-gray-600'}`}
-                             >
-                                <div className="flex justify-between w-full items-center mb-3">
-                                   <span className={`text-base font-black italic uppercase ${isSelected ? 'text-white' : ''}`}>{s.name}</span>
-                                   {isSelected && <svg className="w-5 h-5 flex-shrink-0 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M5 13l4 4L19 7" /></svg>}
-                                </div>
-                                
-                                <span className={`text-[11px] mb-4 leading-relaxed normal-case font-medium ${isSelected ? 'text-gray-300' : 'text-gray-500'}`}>
-                                   {s.desc}
-                                </span>
+                             <>
+                               {/* HUD Data */}
+                               <div className="flex justify-between items-end mb-8 pt-2">
+                                  <div>
+                                     <span className={`block text-2xl font-black italic tracking-tighter ${setupColor}`}>{setupName}</span>
+                                     <span className="block text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Configuração de Asas Ativa</span>
+                                  </div>
+                                  <div className="text-right">
+                                     <span className="block text-4xl font-black text-white leading-none tracking-tighter">{currentSpeed}<span className="text-sm text-gray-400 ml-1 tracking-widest">KM/H</span></span>
+                                     <span className="block text-[10px] text-[#E10600] font-bold uppercase tracking-widest mt-1">Velocidade Máxima Estimada</span>
+                                  </div>
+                               </div>
 
-                                <div className={`flex w-full justify-between items-center text-[10px] pt-3 border-t uppercase ${isSelected ? 'border-gray-700 text-gray-400' : 'border-gray-800 text-gray-600'}`}>
-                                   <span>Top Speed: <strong className={`ml-1 ${isSelected ? 'text-[#E10600]' : ''}`}>{s.speed}</strong></span>
-                                   <span className="text-right">Aderência: <strong className={`ml-1 ${isSelected ? 'text-blue-500' : ''}`}>{s.grip}</strong></span>
-                                </div>
-                             </button>
+                               {/* Dynamic Slider */}
+                               <div className="relative w-full h-10 flex items-center mb-8">
+                                  <div className="absolute inset-0 top-1/2 -mt-1 h-2 rounded-full overflow-hidden flex shadow-inner">
+                                     <div className="h-full bg-gradient-to-r from-[#E10600] via-white to-blue-500 w-full"></div>
+                                  </div>
+                                  
+                                  <input 
+                                    type="range" 
+                                    min="160" max="360" step="10"
+                                    value={currentSpeed}
+                                    onChange={(e) => setPlayerSetups(prev => ({ ...prev, [p.id]: parseInt(e.target.value) }))}
+                                    className="w-full absolute inset-0 opacity-0 cursor-pointer z-20"
+                                  />
+                                  
+                                  {/* Custom Thumb Visualizer */}
+                                  <div 
+                                    className="absolute w-6 h-6 bg-white border-2 border-black rounded-full shadow-[0_0_10px_rgba(255,255,255,0.8)] z-10 pointer-events-none transition-all duration-75"
+                                    style={{ left: `calc(${((currentSpeed - 160) / 200) * 100}% - 12px)` }}
+                                  ></div>
+                               </div>
+
+                               <div className="grid grid-cols-2 gap-4 border-t border-gray-800 pt-6">
+                                  <div className="bg-[#15151e] p-3 rounded flex flex-col items-center">
+                                     <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Downforce (Grip Lateral)</span>
+                                     <span className={`text-lg font-black ${currentSetup.gripMultiplier > 1.3 ? 'text-[#E10600]' : (currentSetup.gripMultiplier < 1.1 ? 'text-blue-500' : 'text-white')}`}>
+                                        +{Math.round((currentSetup.gripMultiplier - 1.0) * 100)}%
+                                     </span>
+                                  </div>
+                                  <div className="bg-[#15151e] p-3 rounded flex flex-col items-center">
+                                     <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-1">Arrasto (Drag Aero)</span>
+                                     <span className={`text-lg font-black ${currentSetup.dragMultiplier > 1.2 ? 'text-yellow-500' : (currentSetup.dragMultiplier < 0.9 ? 'text-green-500' : 'text-gray-400')}`}>
+                                        {(currentSetup.dragMultiplier * 100).toFixed(0)}% Nível Base
+                                     </span>
+                                  </div>
+                               </div>
+                             </>
                            );
-                        })}
+                        })()}
                      </div>
                   </div>
                ))}
@@ -866,6 +974,44 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
          </div>
       )}
       
+      {!isSetupPhase && !raceFinished && startSequence >= 4 && (
+         <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 pointer-events-none">
+            {players.filter(p => !p.isBot).map(p => {
+               const car = carsRef.current.find(c => c.id === p.id);
+               if (!car) return null;
+               
+               return (
+                 <div key={p.id} className="bg-black/80 border-l-4 p-3 rounded-r-xl w-64 shadow-2xl flex flex-col backdrop-blur-md" style={{borderColor: p.color}}>
+                    <span className="text-white font-black text-xl italic tracking-tighter uppercase">{p.driverName || 'P'+p.id}</span>
+                    <div className="flex justify-between items-end mt-1">
+                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Tempo <span id={`hud-time-${p.id}`} className="text-yellow-400 font-mono text-base ml-1">00:00.00</span></span>
+                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">L<span id={`hud-lap-${p.id}`} className="text-white font-black text-base ml-1">1/{totalLaps}</span></span>
+                    </div>
+                    
+                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-800">
+                         <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest flex flex-col">
+                            Última <span id={`hud-last-${p.id}`} className="font-mono text-white text-xs">--:--.--</span>
+                         </span>
+                         <span className="text-[9px] text-[#E10600] font-bold uppercase tracking-widest flex flex-col text-right">
+                            Melhor <span id={`hud-best-${p.id}`} className="font-mono text-white text-xs">--:--.--</span>
+                         </span>
+                    </div>
+                 </div>
+               );
+            })}
+         </div>
+      )}
+
+      {/* Camera Mode Indicator HUD */}
+      {!isSetupPhase && !raceFinished && startSequence >= 4 && (
+         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 bg-black/50 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 flex items-center gap-3">
+             <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">TECLA '{players.find(p => !p.isBot)?.controls?.camera?.replace('Key', '')?.replace('Arrow', '') || 'C'}' CÂMARA:</span>
+             <span className={`text-[10px] font-black uppercase tracking-widest ${cameraModeUI === 'CENTRAL' ? 'text-white' : (cameraModeUI === 'DYNAMIC' ? 'text-[#39FF14]' : 'text-yellow-400')}`}>
+                 {cameraModeUI === 'CENTRAL' ? 'CLÁSSICA CENTRAL' : (cameraModeUI === 'DYNAMIC' ? 'DINÂMICA (ANTECIPAÇÃO)' : 'MODO QUADRANTES OBTUSOS')}
+             </span>
+         </div>
+      )}
+      
       {!raceFinished && (
         <button onClick={onBackToMenu} className="fixed top-4 right-4 bg-red-600 text-white font-bold px-4 py-2 hover:bg-red-700 z-50 rounded-lg shadow-lg text-sm tracking-wider uppercase">
           DESISTIR
@@ -876,12 +1022,15 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
         <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
           <h1 className="text-5xl mb-8 text-white font-black italic">CLASSIFICAÇÃO</h1>
           <div className="bg-[#15151e] border-l-4 border-[#E10600] p-8 mb-8 w-full max-w-2xl">
-            {carsRef.current.sort((a,b) => (a.finishTime || Infinity) - (b.finishTime || Infinity)).map((c, i) => (
-              <div key={c.id} className="flex justify-between mb-2 text-xl" style={{color: c.color}}>
-                <span>{i+1}º - P{c.id}</span>
-                <span>{c.finishTime && c.finishTime !== Infinity ? formatTime(c.finishTime) : 'DNF'}</span>
+            {carsRef.current.sort((a,b) => (a.finishTime || Infinity) - (b.finishTime || Infinity)).map((c, i) => {
+              const pDetails = players.find(p => p.id === c.id);
+              const name = pDetails?.driverName ? pDetails.driverName : (c.isBot ? 'BOT AI' : `P${c.id}`);
+              return (
+              <div key={c.id} className="flex justify-between mb-2 text-xl font-black uppercase" style={{color: c.color}}>
+                <span>{i+1}º - {name}</span>
+                <span className="font-mono">{c.finishTime && c.finishTime !== Infinity ? formatTime(c.finishTime) : 'DNF'}</span>
               </div>
-            ))}
+            )})}
           </div>
           <button onClick={onBackToMenu} className="px-8 py-4 bg-white text-black font-bold">VOLTAR AO MENU</button>
         </div>

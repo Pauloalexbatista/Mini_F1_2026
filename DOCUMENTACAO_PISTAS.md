@@ -70,13 +70,22 @@ Para imitar as transmissões autênticas da Fórmula 1 em escala Mini, o asfalto
 
 ---
 
-## 5. AFINAÇÕES AERODINÂMICAS (FIA SETUPS)
+## 5. AFINAÇÕES AERODINÂMICAS DINÂMICAS (SLIDER FIA)
 
-O sistema "Parc Fermé" pre-race obriga o utilizador a definir o balanço de forças lateral vs frontal. A afinação selecionada rege a aceleração global de **ambos** o Jogador e a malha de Bots da Inteligência Artificial:
+O sistema "Parc Fermé" pre-race apresenta agora um Slider contínuo de Velocidade Máxima (de 160 Km/h a 360 Km/h). O motor matemático ajusta automaticamente todos os fatores físicos do carro:
 
-1. **Monza Specs (Low Downforce):** `360 Km/h` Velocidade Máxima | *Grip Base* (1.0x) | Arrasto: 0.8x
-2. **Balanço F1 (Medium Downforce):** `260 Km/h` Velocidade Máxima | *Grip +25%* (1.25x) | Arrasto: 1.0x
-3. **Mónaco Specs (High Downforce):** `160 Km/h` Velocidade Máxima | *Grip +60%* (1.60x) | Arrasto: 1.5x
+- **Eixo Mónaco (160 Km/h):** Aderência (Grip) Lateral extrema `+60%`. Arrasto Aerodinâmico maciço `Múltiplo 1.50x`.
+- **Eixo Monza (360 Km/h):** Aderência Base `Nível 1.0x`. Arrasto aerodinâmico reduzido `Múltiplo 0.80x`.
+
+### A Equação do "Steering vs Velocidade" (Understeer)
+Para além da aderência genérica, a escolha da aerodinâmica afeta fatalmente o **raio de brecagem** em movimento rápido:
+- `Raio de Viragem = 40 + (Velocidade x SpeedFactor)`
+- Onde `SpeedFactor = 1.8 / Grip`
+*Resultado Prático:* Numa curva em que dois carros viajem **ambos exatos a 150km/h**, o carro afinado para "Mónaco" consegue fletir com o dobro do aperto angular do carro afinado para "Monza". O carro Monza com "asas cortadas" sofre enorme *Understeer* forçando o piloto a soltar o acelerador muito antes!
+
+### A Arte da Travagem (Trail-Braking)
+- A potência dos travões foi calibrada rigorosamente para o **Fator 400** (face ao poder máximo de aceleração de ~500 nos Bots). Isto obriga o carro a desacelerar por metros consideráveis (destruindo as antigas paragens instantâneas arcada).
+- Bloquear as quatro rodas (carregar no travão durante curvas fechadas) **multiplica violentamente o gasto dos pneus**, ditando entradas de pista cautelosas "brake-to-turn".
 
 ---
 

@@ -68,6 +68,11 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
   ctx.fillStyle = '#224A19';
   ctx.fill(squeezedGrassCache.get(spline)!);
 
+  // DEBUG NEON LIMITS: Muros Invisíveis Visíveis para Testes (Verde Neon)
+  ctx.strokeStyle = '#39FF14'; 
+  ctx.lineWidth = 10;
+  ctx.stroke(squeezedWallCache.get(spline)!);
+
   // ==========================================
   // REGRA 2: PIT LANE COM MUROS E ZEBRAS (Relva = 0)
   // ==========================================
@@ -76,8 +81,8 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
       const pitInnerWalls = pitSpline.slice(3, -3);
       
       // 1) O Muro (0.99w) estritamente limitado a 5px puros.
-      // (Isto será a única coisa visível de lado de fora da faixa de rodagem da pit lane!)
-      drawVariablePath(pitInnerWalls, 0.99, '#111111', [], false, 'round');
+      // DEBUG NEON LIMITS: Muros Invisíveis Visíveis para Testes (Verde Neon em vez de Preto)
+      drawVariablePath(pitInnerWalls, 0.99, '#39FF14', [], false, 'round');
   }
 
   // 2. TODAS AS ZEBRAS E BERMAS DA PISTA PRINCIPAL (Isoladas pelas máscaras de segurança Voronoi)

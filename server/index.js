@@ -1,4 +1,6 @@
 import express from 'express';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -10,6 +12,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const server = createServer(app);
+const io = new Server(server, {
+  cors: { origin: '*' }
+});
+
 const PORT = process.env.PORT || 3000; // Match Coolify default Node route
 const JWT_SECRET = process.env.JWT_SECRET || 'f1_2026_super_secret_key_omega';
 
@@ -217,13 +224,63 @@ app.get('*', (req, res) => {
 });
 
 // ---------------------------------------------------------
+// WEBSOCKETS LOBBY MULTIPLAYER (FASE 4)
+// ---------------------------------------------------------
+
+let onlinePlayers = [];
+
+io.on('connection', (socket) => {
+  console.log(`[SOCKET] Handshake established: ${socket.id}`);
+
+  // Evento acionado quando o utilizador faz login c/ sucesso e está na Garagem/Menu
+  socket.on('join_lobby', (data) => {
+      // Remover socket ID antido se existir
+      onlinePlayers = onlinePlayers.filter(p => p.socketId !== socket.id);
+      
+      const newPlayer = {
+         socketId: socket.id,
+         userId: data.userId,
+         driverName: data.driverName,
+         teamName: data.teamName,
+         color: data.color,
+         color2: data.color2,
+         isBot: false,
+         controls: data.controls,
+         isReady: false // Usado para avançar p/ a corrida
+      };
+      
+      onlinePlayers.push(newPlayer);
+      console.log(`[LOBBY] ${newPlayer.driverName} entrou. (Total: ${onlinePlayers.length})`);
+      io.emit('lobby_state', onlinePlayers);
+  });
+  
+  socket.on('set_ready', (isReady) => {
+      const p = onlinePlayers.find(p => p.socketId === socket.id);
+      if (p) {
+         p.isReady = isReady;
+         io.emit('lobby_state', onlinePlayers);
+      }
+  });
+
+  socket.on('start_race', () => {
+      io.emit('start_race');
+  });
+
+  socket.on('disconnect', () => {
+      onlinePlayers = onlinePlayers.filter(p => p.socketId !== socket.id);
+      console.log(`[SOCKET] User Disconnected: ${socket.id}. (Total: ${onlinePlayers.length})`);
+      io.emit('lobby_state', onlinePlayers);
+  });
+});
+
+// ---------------------------------------------------------
 // SERVER BOOT
 // ---------------------------------------------------------
 
 async function startServer() {
   db = await initDB();
-  app.listen(PORT, () => {
-    console.log(`F1 2026 API Server running on http://localhost:${PORT}`);
+  server.listen(PORT, () => {
+    console.log(`F1 2026 API & WSS Server running on http://localhost:${PORT}`);
   });
 }
 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { PlayerConfig, CarSetupType } from '../types';
+import { PlayerConfig } from '../types';
 import { TRACKS as DEFAULT_TRACKS, TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { drawTrack, drawF1Car } from '../renderer';
 import { TEAM_LIVERIES } from '../App';
+import { socket } from '../socket';
 
 function MenuCarPreview({ p, s }: { p: string, s?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -97,6 +98,56 @@ function TrackTelemetryDisplay({ track }: { track: TrackDef }) {
   );
 }
 
+function TrackLeaderboard({ trackId }: { trackId: string }) {
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/tracks/${trackId}/leaderboard`)
+       .then(r => r.json())
+       .then(data => {
+          setLeaderboard(Array.isArray(data) ? data : []);
+          setLoading(false);
+       })
+       .catch(() => setLoading(false));
+  }, [trackId]);
+
+  const formatTime = (ms: number) => {
+    if (ms === Infinity) return '---';
+    const totalSeconds = Math.floor(ms / 1000);
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    const milli = Math.floor((ms % 1000) / 10);
+    return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${milli.toString().padStart(2,'0')}`;
+  };
+
+  if (loading) return <div className="p-3 text-center text-[10px] text-gray-500 font-bold uppercase tracking-widest bg-[#0a0a0f] min-h-[140px] flex items-center justify-center">A CARREGAR TEMPOS...</div>;
+  if (!leaderboard || leaderboard.length === 0) return <div className="p-3 text-center text-[10px] text-gray-600 font-bold uppercase tracking-widest bg-[#0a0a0f] min-h-[140px] flex items-center justify-center border-t border-gray-800">SEM TEMPOS REGISTADOS</div>;
+
+  return (
+    <div className="bg-[#0a0a0f] border-t border-gray-800 p-3 pt-4">
+      <h4 className="text-[10px] text-[#E10600] font-bold uppercase tracking-widest mb-2 flex items-center gap-1">
+         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+         TOP 10 MUNDIAL
+      </h4>
+      <div className="flex flex-col gap-1 max-h-[160px] overflow-y-auto pr-1">
+         {leaderboard.map((entry, idx) => (
+            <div key={idx} className="flex justify-between items-center bg-[#15151e] p-1.5 px-2 rounded border border-gray-800/50">
+               <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-black w-4 text-center ${idx === 0 ? 'text-yellow-400' : (idx === 1 ? 'text-gray-300' : (idx === 2 ? 'text-amber-700' : 'text-gray-600'))}`}>
+                     {idx + 1}
+                  </span>
+                  <span className="text-xs text-white font-bold uppercase tracking-widest w-[110px] truncate">{entry.pilot_name || 'PILOTO'}</span>
+               </div>
+               <span className="text-xs font-mono text-yellow-400 font-bold">{formatTime(entry.best_time)}</span>
+            </div>
+         ))}
+      </div>
+    </div>
+  );
+}
+
 interface MenuProps {
   players: PlayerConfig[];
   playerCount: number;
@@ -118,7 +169,6 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
   const [activeTab, setActiveTab] = useState<'overview' | 'teams' | 'tracks'>('overview');
   const [activeKeyConfig, setActiveKeyConfig] = useState<{ playerIndex: number, action: keyof PlayerConfig['controls'] } | null>(null);
   
-  const [readyPlayers, setReadyPlayers] = useState<Record<number, boolean>>({});
   const ALL_TRACKS = [...tracks, ...DEFAULT_TRACKS.filter(sysT => !tracks.some(dbT => dbT.id === sysT.id))];
   const tracksAreReady = ALL_TRACKS.length > 0;
 
@@ -170,11 +220,6 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
     return 'INTERNATIONAL';
   };
 
-  const SETUP_CARDS = [
-    { id: 'LOW_DF' as CarSetupType, name: 'FULL SPEED', speed: '360 KM/H', grip: 'Normal', color: 'border-blue-500', desc: 'Aero Mínima. Feito para voar nas retas longas mas um diabo para curvar a alta velocidade.' },
-    { id: 'BALANCED' as CarSetupType, name: 'BALANCED', speed: '260 KM/H', grip: 'Aumentado', color: 'border-white', desc: 'O Setup Standard Misto. Balanço matemático entre velocidade de ponta e agressividade em curva.' },
-    { id: 'HIGH_DF' as CarSetupType, name: 'FULL CURVE', speed: '160 KM/H', grip: 'Extremo', color: 'border-[#E10600]', desc: 'Asas no ângulo máximo (+60% Downforce Lateral). Devora ganchos fechados sem pisar o travão.' }
-  ];
 
   return (
     <div className="min-h-screen bg-[#15151e] text-white font-f1 flex flex-col pt-0 pb-20 w-full overflow-x-hidden relative">
@@ -203,13 +248,13 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-[10px]">2026 FIA Formula One</span>
                 <span className="text-xs font-black text-white uppercase tracking-widest leading-[12px] mt-1">World Championship™</span>
              </div>
-             
-             <button 
+
+             <button
                 onClick={onStart}
-                disabled={ALL_TRACKS.length === 0 || !players.filter(p => !p.isBot).every(p => readyPlayers[p.id])}
-                className={`text-white font-black text-[13px] tracking-widest pt-2 pb-1.5 px-6 rounded transition-colors flex items-center shadow-[0_0_15px_rgba(225,6,0,0.4)] h-[36px] ${tracksAreReady ? (players.filter(p => !p.isBot).every(p => readyPlayers[p.id]) ? 'bg-[#E10600] cursor-pointer hover:bg-white hover:text-[#E10600]' : 'bg-gray-800 opacity-50 cursor-not-allowed') : 'bg-gray-800 opacity-50 cursor-not-allowed'}`}
+                disabled={ALL_TRACKS.length === 0 || !players.every(p => p.isReady)}
+                className="w-full sm:flex-1 bg-[#E10600] hover:bg-red-700 text-white disabled:bg-gray-800 disabled:text-gray-500 py-3 sm:py-5 px-6 rounded text-sm sm:text-base font-black italic tracking-widest uppercase transition-colors flex items-center justify-center gap-3 disabled:cursor-not-allowed group relative overflow-hidden"
              >
-                {players.filter(p => !p.isBot).every(p => readyPlayers[p.id]) ? (
+                {players.every(p => p.isReady) ? (
                    <>IR PARA A <span className="hidden sm:inline ml-1">CORRIDA</span> <svg className="w-4 h-4 ml-2 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></>
                 ) : (
                    'A AGUARDAR PILOTOS...'
@@ -236,15 +281,13 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                    <div className="p-4 bg-black/40 rounded-lg border border-gray-800 flex flex-col min-h-[160px]">
                       <div className="flex justify-between items-end mb-4">
                          <label className="text-xs text-gray-500 font-bold uppercase tracking-widest">Calendário de Pistas</label>
-                         {user?.role === 'admin' && (
-                             <button 
-                               onClick={() => setActiveTab('tracks')}
-                               className="text-[10px] text-[#E10600] font-bold uppercase tracking-widest hover:underline flex items-center gap-1"
-                             >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                                Adicionar Circuito
-                             </button>
-                         )}
+                         <button 
+                           onClick={() => setActiveTab('tracks')}
+                           className="text-[10px] text-white font-bold uppercase tracking-widest hover:text-[#E10600] transition-colors flex items-center gap-1 bg-gray-800 px-3 py-1.5 rounded"
+                         >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 6h16M4 12h16m-7 6h7" /></svg>
+                            ESCOLHER PISTA
+                         </button>
                       </div>
 
                       <div className="flex-1 space-y-3">
@@ -269,25 +312,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                          {/* Placeholder para futuras pistas no campeonato */}
                       </div>
 
-                      <div className="bg-[#1e1e24] border-l-4 border-gray-600 p-3 flex justify-between items-center rounded shadow-sm gap-4 mt-3 mb-4">
-                         <div className="flex flex-col flex-1">
-                            <span className="font-bold text-gray-300 uppercase text-[10px] tracking-widest">Capacidade do Lobby</span>
-                            <span className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Automático: Restantes vagas = Bots AI</span>
-                         </div>
-                         
-                         <div className="flex items-center gap-2 bg-black py-1 px-3 rounded border border-gray-700">
-                            <label className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">HUMANOS</label>
-                            <select 
-                               value={playerCount}
-                               onChange={(e) => setPlayerCount(parseInt(e.target.value))}
-                               className="bg-transparent text-white font-black text-sm outline-none cursor-pointer"
-                            >
-                               {[1,2,3,4,5,6].map(n => (
-                                 <option key={n} value={n} className="bg-[#15151e]">{n}</option>
-                               ))}
-                            </select>
-                         </div>
-                      </div>
+
 
                       <div className="pt-4 mt-auto text-right border-t border-gray-800">
                          <span className="text-xs font-bold uppercase tracking-widest text-[#E10600]">
@@ -307,34 +332,41 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                    <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-4">Pilotos na Sessão</p>
 
                    <div className="flex flex-col gap-3 min-h-[300px]">
-                      {/* Jogadores Humanos (Local ou Network) */}
-                      {players.filter(p => !p.isBot).map((p, idx) => (
-                        <div key={p.id} className={`bg-black/60 border ${readyPlayers[p.id] ? 'border-[#E10600]' : 'border-gray-700'} p-4 flex justify-between items-center rounded-lg relative overflow-hidden group hover:border-[#E10600] transition-colors`}>
-                           <div className="absolute left-0 top-0 w-1.5 h-full" style={{ backgroundColor: p.color }}></div>
-                           <div className="pl-3 flex flex-col justify-center">
-                                 <span className="text-white font-black uppercase tracking-tighter text-lg leading-tight">{p.driverName} {idx === 0 && <span className="text-[#E10600] ml-1 text-[10px] uppercase tracking-widest border border-[#E10600] rounded px-1.5 py-0.5">(HOST)</span>}</span>
-                                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{p.teamName}</span>
-                           </div>
-                           <div>
-                              <button 
-                                 onClick={() => setReadyPlayers(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
-                                 className={`${readyPlayers[p.id] ? 'bg-green-600 text-white shadow-[0_0_15px_rgba(22,163,74,0.4)] border border-green-500' : 'bg-transparent border border-gray-600 text-gray-500 hover:bg-gray-800 hover:text-white'} px-4 sm:px-6 py-2 sm:py-3 rounded text-[10px] sm:text-xs font-black italic uppercase tracking-widest transition-all flex items-center gap-2`}
-                              >
-                                 {readyPlayers[p.id] ? (
-                                    <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg> PRONTO</>
-                                 ) : (
-                                    'CLICAR PRONTO'
-                                 )}
-                              </button>
-                           </div>
-                        </div>
-                      ))}
+                      {/* Todos os Pilotos (Humanos Online) */}
+                      {players.map((p, idx) => {
+                         const isMe = p.socketId === socket.id;
+                         return (
+                         <div key={p.id} className={`bg-black/60 border ${p.isReady ? 'border-[#E10600]' : 'border-gray-700'} p-4 flex justify-between items-center rounded-lg relative overflow-hidden group hover:border-[#E10600] transition-colors`}>
+                            <div className="absolute left-0 top-0 w-1.5 h-full" style={{ backgroundColor: p.color }}></div>
+                            <div className="pl-3 flex flex-col justify-center">
+                                  <span className="text-white font-black uppercase tracking-tighter text-lg leading-tight">{p.driverName} {idx === 0 && <span className="text-[#E10600] ml-1 text-[10px] uppercase tracking-widest border border-[#E10600] rounded px-1.5 py-0.5">(HOST)</span>} {isMe && <span className="text-gray-400 ml-1 text-[10px] uppercase tracking-widest border border-gray-600 rounded px-1.5 py-0.5">(TU)</span>}</span>
+                                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{p.teamName}</span>
+                            </div>
+                            <div>
+                               {isMe ? (
+                                  <button 
+                                     onClick={() => socket.emit('set_ready', !p.isReady)}
+                                     className={`${p.isReady ? 'bg-green-600 text-white shadow-[0_0_15px_rgba(22,163,74,0.4)] border border-green-500' : 'bg-transparent border border-gray-600 text-gray-500 hover:bg-gray-800 hover:text-white'} px-4 sm:px-6 py-2 sm:py-3 rounded text-[10px] sm:text-xs font-black italic uppercase tracking-widest transition-all flex items-center gap-2`}
+                                  >
+                                     {p.isReady ? (
+                                        <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg> PRONTO</>
+                                     ) : (
+                                        'CLICAR PRONTO'
+                                     )}
+                                  </button>
+                               ) : (
+                                  <span className={`${p.isReady ? 'text-green-500 font-bold border-green-500 bg-green-900/20' : 'text-gray-500 border-gray-700'} border px-4 py-2 rounded text-[10px] uppercase tracking-widest`}>
+                                     {p.isReady ? 'PRONTO A CORRER' : 'A PREPARAR...'}
+                                  </span>
+                               )}
+                            </div>
+                         </div>
+                      )})}
 
                       {/* Vagas Abertas / Modo Suspenso */}
                       <div className="mt-auto bg-black/30 border-2 border-gray-800 border-dashed p-4 flex justify-center items-center rounded-lg min-h-[80px] opacity-70">
                          <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest text-center leading-relaxed">
-                            A AGUARDAR PILOTOS ONLINE...<br/>
-                            <span className="opacity-50">(Bot AI irá preencher as {11 - players.filter(p => !p.isBot).length} vagas restantes no momento da partida)</span>
+                            A AGUARDAR PILOTOS ONLINE...
                          </span>
                       </div>
                    </div>
@@ -467,6 +499,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                          </div>
                          
                          <TrackTelemetryDisplay track={t} />
+                         <TrackLeaderboard trackId={t.id.toString()} />
 
                          <div className="p-5 bg-gray-100 border-t border-gray-300 flex justify-center mt-auto">
                             {isSelected ? (
