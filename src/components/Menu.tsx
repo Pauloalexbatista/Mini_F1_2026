@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PlayerConfig } from '../types';
 import { TRACKS as DEFAULT_TRACKS, TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { drawTrack, drawF1Car, drawMoto, drawDriftCar, drawRallyCar } from '../renderer';
@@ -417,11 +417,11 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                            if (!selectedTracks.length || !eventName.trim()) return;
                            const token = localStorage.getItem('token');
                            const eid = `evt_${Date.now()}`;
+                           const trackEntries = selectedTracks.map(id => ({ id, laps: eventTrackLaps[id] ?? 3 }));
                            await fetch('/api/events', {
                              method: 'POST',
                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                             const trackEntries = selectedTracks.map(id => ({ id, laps: eventTrackLaps[id] ?? 3 }));
-                            body: JSON.stringify({ id: eid, name: eventName.trim(), tracks_json: JSON.stringify(trackEntries), laps: 3 })
+                             body: JSON.stringify({ id: eid, name: eventName.trim(), tracks_json: JSON.stringify(trackEntries), laps: 3 })
                            });
                            socket.emit('refresh_events');
                            setShowEventCreator(false);
