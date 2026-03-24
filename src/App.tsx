@@ -35,6 +35,8 @@ export default function App() {
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   // Frozen player list captured at race-start so mid-race lobby changes never reinitialize cars
   const [racePlayers, setRacePlayers] = useState<PlayerConfig[]>([]);
+  // Per-track lap counts: {[trackId]: laps}
+  const [trackLapsMap, setTrackLapsMap] = useState<Record<string, number>>({});
   
   const [appState, setAppState] = useState<'menu' | 'playing' | 'builder'>('menu');
 
@@ -155,12 +157,14 @@ export default function App() {
         };
 
         const onStartRace = (data: any) => {
-            if (data && data.tracks) {
-                setSelectedTracks(data.tracks);
-                setTotalLaps(data.laps || 1);
+            if (data && data.trackEntries) {
+                const entries: {id: string, laps: number}[] = data.trackEntries;
+                setSelectedTracks(entries.map(e => e.id));
+                const lapsMap: Record<string, number> = {};
+                entries.forEach(e => { lapsMap[e.id] = e.laps; });
+                setTrackLapsMap(lapsMap);
             }
             if (dbTracksRef.current.length > 0) {
-               // Freeze the player list at race-start so mid-race lobby changes don't restart cars
                setRacePlayers([...activePlayersRef.current]);
                setAppState('playing');
             }
@@ -190,7 +194,9 @@ export default function App() {
   const handleStartGame = () => {
     if (dbTracks.length > 0) {
         if (socket.connected && activeEventId) {
-            socket.emit('start_race', { tracks: selectedTracks, laps: totalLaps });
+            // Build per-track laps entries
+            const trackEntries = selectedTracks.map(id => ({ id, laps: trackLapsMap[id] || totalLaps }));
+            socket.emit('start_race', { trackEntries });
         } else {
             setRacePlayers([...activePlayers]); // Freeze solo lineup
             setAppState('playing');
@@ -200,10 +206,12 @@ export default function App() {
     }
   };
 
-  const handleJoinEvent = (eventId: string, tracks: string[], laps: number) => {
+  const handleJoinEvent = (eventId: string, trackEntries: {id: string, laps: number}[]) => {
     setActiveEventId(eventId);
-    setSelectedTracks(tracks);
-    setTotalLaps(laps);
+    setSelectedTracks(trackEntries.map(e => e.id));
+    const lapsMap: Record<string, number> = {};
+    trackEntries.forEach(e => { lapsMap[e.id] = e.laps; });
+    setTrackLapsMap(lapsMap);
     socket.emit('join_event', eventId);
   };
 
@@ -426,7 +434,7 @@ export default function App() {
           key={`race-${currentChampionshipRaceIndex}`}
           players={racePlayers.length > 0 ? racePlayers : activePlayers} 
           track={dbTracks.find(t => t.id === selectedTracks[currentChampionshipRaceIndex]) || dbTracks[0]}
-          totalLaps={totalLaps}
+          totalLaps={trackLapsMap[selectedTracks[currentChampionshipRaceIndex]] || totalLaps}
           onBackToMenu={handleBackToMenu} 
         />
       )}

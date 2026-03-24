@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { PlayerConfig } from '../types';
 import { TRACKS as DEFAULT_TRACKS, TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { drawTrack, drawF1Car, drawMoto, drawDriftCar, drawRallyCar } from '../renderer';
@@ -133,7 +133,7 @@ interface MenuProps {
   globalRoster?: any[];
   lobbyState?: any[];
   activeEventId?: string | null;
-  onJoinEvent?: (eventId: string, tracks: string[], laps: number) => void;
+  onJoinEvent?: (eventId: string, trackEntries: {id: string, laps: number}[]) => void;
   onLeaveEvent?: () => void;
 }
 
@@ -146,6 +146,15 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
   const [openEvents, setOpenEvents] = useState<any[]>([]);
   const [eventName, setEventName] = useState('');
   const [showEventCreator, setShowEventCreator] = useState(false);
+  // Per-track laps for the event creator form: {trackId: laps}
+  const [eventTrackLaps, setEventTrackLaps] = useState<Record<string, number>>({});
+
+  const openCreator = () => {
+    setSelectedTracks([]);       // start clean - no leftover tracks
+    setEventTrackLaps({});       // reset per-track laps
+    setEventName('');            // reset name
+    setShowEventCreator(true);
+  };
 
   // Fetch open events on mount and when lobby changes
   useEffect(() => {
@@ -265,12 +274,16 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                  disabled={
                    ALL_TRACKS.length === 0 ||
                    selectedTracks.length === 0 ||
+                   // Online but no event = must create/join an event first
+                   (socket.connected && !activeEventId) ||
                    // In a multiplayer lobby: wait for all humans to be ready
                    (!!activeEventId && lobbyState.length > 0 && !lobbyState.every((p: any) => p.isReady))
                  }
                  className="w-full sm:flex-1 bg-[#E10600] hover:bg-red-700 text-white disabled:bg-gray-800 disabled:text-gray-500 py-3 sm:py-5 px-6 rounded text-sm sm:text-base font-black italic tracking-widest uppercase transition-colors flex items-center justify-center gap-3 disabled:cursor-not-allowed group relative overflow-hidden"
               >
-                 {selectedTracks.length === 0 ? (
+                 {socket.connected && !activeEventId ? (
+                   'CRIAR OU JUNTAR EVENTO'
+                 ) : selectedTracks.length === 0 ? (
                    'SELECIONE UMA PISTA...'
                  ) : activeEventId ? (
                    lobbyState.length > 0 && lobbyState.every((p: any) => p.isReady) ? (
@@ -407,7 +420,8 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                            await fetch('/api/events', {
                              method: 'POST',
                              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                             body: JSON.stringify({ id: eid, name: eventName.trim(), tracks_json: JSON.stringify(selectedTracks), laps: totalLaps })
+                             const trackEntries = selectedTracks.map(id => ({ id, laps: eventTrackLaps[id] ?? 3 }));
+                            body: JSON.stringify({ id: eid, name: eventName.trim(), tracks_json: JSON.stringify(trackEntries), laps: 3 })
                            });
                            socket.emit('refresh_events');
                            setShowEventCreator(false);
