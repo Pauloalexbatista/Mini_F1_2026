@@ -104,12 +104,13 @@ app.post('/api/login', async (req, res) => {
 
 app.get('/api/me', authenticateToken, async (req, res) => {
   try {
-    const userRow = await db.get('SELECT id, username, role, pilot_name, selected_car_id, primary_color, secondary_color, helmet_color FROM users WHERE id = ?', [req.user.id]);
+    const userRow = await db.get('SELECT id, username, role, pilot_name, selected_car_id, primary_color, secondary_color, helmet_color, controls FROM users WHERE id = ?', [req.user.id]);
     res.json({
         ...userRow,
         primary_color: userRow.primary_color || '#E10600',
         secondary_color: userRow.secondary_color || '#000000',
-        helmet_color: userRow.helmet_color || '#FFDD00'
+        helmet_color: userRow.helmet_color || '#FFDD00',
+        controls: userRow.controls ? JSON.parse(userRow.controls) : undefined
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -118,10 +119,10 @@ app.get('/api/me', authenticateToken, async (req, res) => {
 
 app.put('/api/me', authenticateToken, async (req, res) => {
   try {
-    const { pilot_name, selected_car_id, primary_color, secondary_color, helmet_color } = req.body;
+    const { pilot_name, selected_car_id, primary_color, secondary_color, helmet_color, controls } = req.body;
     await db.run(
-      'UPDATE users SET pilot_name = ?, selected_car_id = ?, primary_color = ?, secondary_color = ?, helmet_color = ? WHERE id = ?',
-      [pilot_name, selected_car_id, primary_color, secondary_color, helmet_color, req.user.id]
+      'UPDATE users SET pilot_name = ?, selected_car_id = ?, primary_color = ?, secondary_color = ?, helmet_color = ?, controls = ? WHERE id = ?',
+      [pilot_name, selected_car_id, primary_color, secondary_color, helmet_color, JSON.stringify(controls), req.user.id]
     );
     res.json({ message: 'Profile updated successfully' });
   } catch (error) {
@@ -242,16 +243,28 @@ io.on('connection', (socket) => {
 
   // Evento acionado quando o utilizador faz login c/ sucesso e está na Garagem/Menu
   socket.on('join_lobby', (data) => {
-      // Remover socket ID antigo se existir
+      const pin = (data.pin || 'GLOBAL').toUpperCase().trim();
+      
+      // Remover socket ID antigo se existir em qualquer sala e forçar o LEAVE da sala antiga do Socket.io
+      const oldPlayer = onlinePlayers.find(p => p.socketId === socket.id);
+      if (oldPlayer && oldPlayer.pin !== pin) {
+          socket.leave(oldPlayer.pin);
+      }
+      
+      socket.join(pin);
+
       onlinePlayers = onlinePlayers.filter(p => p.socketId !== socket.id);
       
-      if (onlinePlayers.length >= 10 && !onlinePlayers.some(p => p.userId === data.userId)) {
-          socket.emit('lobby_error', { message: 'A grelha de partida já está cheia (Lotação Máxima: 10/10 Pilotos).' });
+      const roomPlayers = onlinePlayers.filter(p => p.pin === pin);
+      
+      if (roomPlayers.length >= 10 && !roomPlayers.some(p => p.userId === data.userId)) {
+          socket.emit('lobby_error', { message: 'A grelha de partida nesta sala já está cheia (10/10 Pilotos).' });
           return;
       }
       
       const newPlayer = {
          socketId: socket.id,
+         pin: pin,
          userId: data.userId,
          driverName: data.driverName,
          teamName: data.teamName,
@@ -264,32 +277,41 @@ io.on('connection', (socket) => {
       };
       
       onlinePlayers.push(newPlayer);
-      console.log(`[LOBBY] ${newPlayer.driverName} entrou. (Total: ${onlinePlayers.length})`);
-      io.emit('lobby_state', onlinePlayers);
+      console.log(`[LOBBY] ${newPlayer.driverName} entrou na SALA: ${pin}`);
+      io.to(pin).emit('lobby_state', onlinePlayers.filter(p => p.pin === pin));
   });
   
   socket.on('set_ready', (isReady) => {
       const p = onlinePlayers.find(p => p.socketId === socket.id);
       if (p) {
          p.isReady = isReady;
-         io.emit('lobby_state', onlinePlayers);
+         io.to(p.pin).emit('lobby_state', onlinePlayers.filter(x => x.pin === p.pin));
       }
   });
 
   // TELEMETRIA 20Hz (Fase 4 Multiplayer Engine)
   socket.on('player_tick', (carData) => {
-      // Re-transmite imediatamente as coordenadas físicas para os outros clientes
-      socket.broadcast.emit('remote_tick', carData);
+      const p = onlinePlayers.find(p => p.socketId === socket.id);
+      if (p) {
+         socket.to(p.pin).emit('remote_tick', carData);
+      }
   });
 
-  socket.on('start_race', () => {
-      io.emit('start_race');
+  socket.on('start_race', (data) => {
+      const p = onlinePlayers.find(p => p.socketId === socket.id);
+      if (p) {
+          console.log(`[RACE] Sala ${p.pin} vai arrancar! Pistas:`, data.tracks);
+          io.to(p.pin).emit('race_started', data);
+      }
   });
 
   socket.on('disconnect', () => {
-      onlinePlayers = onlinePlayers.filter(p => p.socketId !== socket.id);
-      console.log(`[SOCKET] User Disconnected: ${socket.id}. (Total: ${onlinePlayers.length})`);
-      io.emit('lobby_state', onlinePlayers);
+      const p = onlinePlayers.find(x => x.socketId === socket.id);
+      onlinePlayers = onlinePlayers.filter(x => x.socketId !== socket.id);
+      if (p) {
+         console.log(`[SOCKET] Piloto saiu da sala ${p.pin}: ${socket.id}`);
+         io.to(p.pin).emit('lobby_state', onlinePlayers.filter(x => x.pin === p.pin));
+      }
   });
 });
 

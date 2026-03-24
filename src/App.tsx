@@ -16,12 +16,11 @@ const BOT_NAMES = [
 ];
 
 const DEFAULT_CONTROLS = [
-  { up: 'KeyQ', down: 'KeyA', left: 'KeyO', right: 'KeyP' },
-  { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' },
-  { up: 'KeyI', down: 'KeyK', left: 'KeyJ', right: 'KeyL' },
-  { up: 'Numpad8', down: 'Numpad5', left: 'Numpad4', right: 'Numpad6' },
-  { up: 'KeyT', down: 'KeyG', left: 'KeyF', right: 'KeyH' },
-  { up: 'KeyY', down: 'KeyH', left: 'KeyG', right: 'KeyJ' },
+  { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', camera: 'KeyC' },
+  { up: 'KeyQ', down: 'KeyA', left: 'KeyO', right: 'KeyP', camera: 'KeyC' },
+  { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', camera: 'KeyC' },
+  { up: 'Numpad8', down: 'Numpad5', left: 'Numpad4', right: 'Numpad6', camera: 'Numpad0' },
+  { up: 'KeyI', down: 'KeyK', left: 'KeyJ', right: 'KeyL', camera: 'KeyM' }
 ];
 
 const randomHex = () => '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
@@ -56,6 +55,7 @@ export default function App() {
                  color: userData.primary_color || '#E10600',
                  color2: userData.secondary_color || '#000000',
                  helmetColor: userData.helmet_color || '#FFDD00',
+                 controls: userData.controls || np[0].controls,
                  driverName: userData.pilot_name || userData.username || 'PILOTO 1',
                  teamName: 'Garagem Pessoal'
              };
@@ -118,6 +118,7 @@ export default function App() {
       driverName: defaultGuestName,
       controls: DEFAULT_CONTROLS[0],
       isBot: false,
+      isLocal: true,
       difficulty: 1.0
     }
   ]);
@@ -293,7 +294,7 @@ export default function App() {
            id: 1,
            isBot: false,
            isLocal: true,
-           controls: players[0]?.controls || { up: 'KeyQ', down: 'KeyA', left: 'KeyO', right: 'KeyP', camera: 'KeyC' },
+           controls: players[0]?.controls || DEFAULT_CONTROLS[0],
            driverName: players[0]?.driverName || user?.pilot_name || defaultGuestName,
            teamName: 'Garagem Pessoal',
            color: players[0]?.color || user?.primary_color || '#E10600',

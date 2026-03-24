@@ -20,6 +20,8 @@ export interface CarPhysics {
   mass: number;
 
   color: string;
+  color2?: string;
+  helmetColor?: string;
   isBot: boolean;
   isLocal?: boolean;
   remoteTarget?: { x: number, y: number, a: number };

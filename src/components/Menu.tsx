@@ -137,6 +137,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
   const [sortBy, setSortBy] = useState<'name' | 'lengthKm' | 'topSpeedKmh' | 'corners'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [activeKeyConfig, setActiveKeyConfig] = useState<{ playerIndex: number, action: keyof PlayerConfig['controls'] } | null>(null);
+  const [pinCode, setPinCode] = useState('');
   
   const ALL_TRACKS = [...tracks, ...DEFAULT_TRACKS.filter(sysT => !tracks.some(dbT => dbT.id === sysT.id))];
   const tracksAreReady = ALL_TRACKS.length > 0;
@@ -223,9 +224,9 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
           
           {/* Navigation Links (Tabs) */}
           <nav className="hidden md:flex items-center gap-6 text-[13px] font-bold tracking-widest uppercase h-full pt-1">
-            <button onClick={() => setActiveTab('overview')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'overview' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>Paddock</button>
+            <button onClick={() => setActiveTab('overview')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'overview' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>PADDOCK</button>
             <button onClick={() => setActiveTab('teams')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'teams' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>GARAGEM</button>
-            <button onClick={() => setActiveTab('tracks')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'tracks' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>Tracks</button>
+            <button onClick={() => setActiveTab('tracks')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'tracks' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>TRACKS</button>
             <button onClick={onOpenProfile} className={`flex items-center h-full hover:text-white transition-colors border-b-2 border-transparent text-[#E10600] ml-4 hover:border-[#E10600]`}>
               <svg className="w-4 h-4 mr-1.5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
               PILOTO
@@ -351,16 +352,22 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                             </div>
                             <div>
                                {isMe ? (
-                                  <button 
-                                     onClick={() => socket.emit('set_ready', !p.isReady)}
-                                     className={`${p.isReady ? 'bg-green-600 text-white shadow-[0_0_15px_rgba(22,163,74,0.4)] border border-green-500' : 'bg-transparent border border-gray-600 text-gray-500 hover:bg-gray-800 hover:text-white'} px-4 sm:px-6 py-2 sm:py-3 rounded text-[10px] sm:text-xs font-black italic uppercase tracking-widest transition-all flex items-center gap-2`}
-                                  >
-                                     {p.isReady ? (
-                                        <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg> PRONTO</>
-                                     ) : (
-                                        'CLICAR PRONTO'
-                                     )}
-                                  </button>
+                                  !socket.id ? (
+                                    <span className="text-[10px] sm:text-xs font-black text-gray-500 uppercase tracking-widest border border-gray-700 bg-black/40 px-4 sm:px-6 py-2 sm:py-3 rounded flex items-center gap-2">
+                                      MODO OFFLINE
+                                    </span>
+                                  ) : (
+                                    <button 
+                                       onClick={() => socket.emit('set_ready', !p.isReady)}
+                                       className={`${p.isReady ? 'bg-green-600 text-white shadow-[0_0_15px_rgba(22,163,74,0.4)] border border-green-500' : 'bg-transparent border border-gray-600 text-gray-500 hover:bg-gray-800 hover:text-white'} px-4 sm:px-6 py-2 sm:py-3 rounded text-[10px] sm:text-xs font-black italic uppercase tracking-widest transition-all flex items-center gap-2`}
+                                    >
+                                       {p.isReady ? (
+                                          <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg> PRONTO</>
+                                       ) : (
+                                          'CLICAR PRONTO'
+                                       )}
+                                    </button>
+                                  )
                                ) : (
                                   <span className={`${p.isReady ? 'text-green-500 font-bold border-green-500 bg-green-900/20' : 'text-gray-500 border-gray-700'} border px-4 py-2 rounded text-[10px] uppercase tracking-widest`}>
                                      {p.isReady ? 'PRONTO A CORRER' : 'A PREPARAR...'}
@@ -431,7 +438,20 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
 
              </div>
 
-             <div className="mt-10 mb-10 text-center w-full max-w-4xl">
+             <div className="mt-10 mb-10 text-center w-full max-w-4xl flex flex-col items-center">
+                
+                <div className="mb-4 bg-[#1a1a24] p-4 rounded-xl border border-gray-800 shadow-inner flex flex-col items-center min-w-[300px]">
+                   <label className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mb-2">PIN DA SALA PRIVADA (EX: F1KART)</label>
+                   <input 
+                     type="text" 
+                     placeholder="DEIXAR EM BRANCO = LOBBY PÚBLICO"
+                     value={pinCode}
+                     onChange={(e) => setPinCode(e.target.value)}
+                     className="w-full bg-black text-center text-white font-black text-xl tracking-widest uppercase p-3 rounded outline-none border border-transparent focus:border-[#E10600] transition-colors placeholder:text-gray-700 placeholder:text-sm"
+                     maxLength={10}
+                   />
+                </div>
+
                 <button 
                   onClick={async () => {
                      // Permanently save user color to DB through API if logged in
@@ -460,6 +480,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                      
                      // Send socket update across multiplayer lobby instantly
                      socket.emit('join_lobby', {
+                         pin: pinCode.trim().toUpperCase() || 'GLOBAL',
                          userId: user?.id || 1,
                          driverName: user?.pilot_name || user?.username || 'PILOTO 1',
                          teamName: 'Garagem Pessoal',
@@ -469,7 +490,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                          controls: players[0]?.controls
                      });
                   }}
-                  className="w-full bg-[#E10600] text-white font-black uppercase tracking-widest px-12 py-5 rounded-xl hover:bg-white hover:text-[#E10600] transition-colors shadow-[0_0_20px_rgba(225,6,0,0.4)]"
+                  className="w-full max-w-[300px] bg-[#E10600] text-white font-black uppercase tracking-widest px-12 py-5 rounded-xl hover:bg-white hover:text-[#E10600] transition-colors shadow-[0_0_20px_rgba(225,6,0,0.4)]"
                 >
                   CONFIRMAR!
                 </button>

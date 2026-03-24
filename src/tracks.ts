@@ -92,9 +92,9 @@ export function computeSpline(nodes: SplineNode[], isClosed = true, pStartTangen
              const physicalD = Math.sqrt(distSq);
              
              // SEGREDOS DOS HAIRPINS: Uma reta não se deve aniquilar a si mesma!
-             // Só medimos perigo se for outra pista vizinha longe (pathDist > 1000) 
-             // OU se for um gancho apertado onde a fita andou mais 1.5x do que o voo do pássaro!
-             if (pathDist > 1000 || (pathDist > 150 && pathDist > physicalD * 1.5)) {
+             // Só medimos perigo se for outra pista vizinha longe (pathDist > 800) 
+             // O limite arbitrário das chicanes apertadas foi removido para permitir Bermas e Relva puras.
+             if (pathDist > 800) {
                  if (distSq < minDists[i]) minDists[i] = distSq;
              }
              

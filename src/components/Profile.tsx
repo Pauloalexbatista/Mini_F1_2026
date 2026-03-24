@@ -120,7 +120,8 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
            pilot_name: pilotName,
            primary_color: primaryColor,
            secondary_color: secondaryColor,
-           helmet_color: helmetColor
+           helmet_color: helmetColor,
+           controls: players[0]?.controls
         })
       });
       if (res.ok) {
@@ -129,8 +130,18 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
            pilot_name: pilotName,
            primary_color: primaryColor,
            secondary_color: secondaryColor,
-           helmet_color: helmetColor
+           helmet_color: helmetColor,
+           controls: players[0]?.controls
         });
+        
+        onUpdatePlayer(0, {
+            ...players[0],
+            color: primaryColor,
+            color2: secondaryColor,
+            helmetColor: helmetColor,
+            driverName: pilotName
+        });
+        
         onBack();
       }
     } catch (e) {

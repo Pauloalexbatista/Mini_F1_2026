@@ -45,10 +45,14 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
       for(let i=0; i<spline.length; i++) {
             const curr = spline[i];
             
-            // Optimization Stride (120px saves 85% geometry while 340px circles cleanly overlap without visible gaps)
+            // We cannot randomly skip nodes that have drastically different maxWallRadius (Voronoi squeeze).
+            // Skip only if distance < 60 AND radius is relatively stable.
             if (i > 0 && i < spline.length - 1) {
                 const distToLast = Math.sqrt((curr.x - lastRenderedNode.x)**2 + (curr.y - lastRenderedNode.y)**2);
-                if (distToLast < 120) continue; 
+                const rDiff = Math.abs((curr.maxWallRadius || 0) - (lastRenderedNode.maxWallRadius || 0));
+                
+                // If the Voronoi boundary is changing rapidly, DO NOT skip!
+                if (distToLast < 60 && rDiff < 10) continue; 
             }
             lastRenderedNode = curr;
             

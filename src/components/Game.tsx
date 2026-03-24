@@ -108,7 +108,10 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
         grip: 1.0 + (p.isBot ? (p.difficulty || 0.8) * 0.1 : 0.2),
         mass: 800,
         color: p.color,
+        color2: p.color2,
+        helmetColor: p.helmetColor,
         isBot: p.isBot || false,
+        isLocal: p.isLocal || false,
         givenUp: false,
         damage: 0,
         tireHealth: 100,
@@ -663,6 +666,23 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
           // Apply Physics ONLY for local instances (Bots master / Local human)
           if (car.isLocal || car.isBot) {
               updateCarPhysics(car, dt, surface);
+              
+              if (car.isLocal && socket.connected) {
+                 if (now - lastEmitRef.current > 50) { // 20Hz limit
+                    socket.emit('player_tick', {
+                        id: car.id,
+                        x: car.x,
+                        y: car.y,
+                        a: car.angle,
+                        vx: car.vx,
+                        vy: car.vy,
+                        s: car.steer,
+                        b: car.brake,
+                        t: car.throttle
+                    });
+                    lastEmitRef.current = now;
+                 }
+              }
           }
           
           audio.updateEngine(car.id, Math.sqrt(car.vx*car.vx + car.vy*car.vy) / 1200, car.throttle, car.isBot);
@@ -1162,13 +1182,13 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
       
       {/* Global Fastest Lap Popup HUD */}
       {fastLapPopup && !raceFinished && startSequence >= 4 && (
-         <div className="absolute bottom-8 right-8 z-50 flex flex-col items-end drop-shadow-2xl animate-bounce">
-            <div className="bg-purple-800/90 backdrop-blur-md text-white px-8 py-3 border-t-4 shadow-[0_0_30px_rgba(147,51,234,0.6)] flex flex-col items-center justify-center gap-1" style={{borderTopColor: fastLapPopup.color}}>
-               <span className="text-xl font-bold tracking-widest uppercase text-purple-200">{fastLapPopup.isInitial ? 'TEMPO DE REFERÊNCIA' : 'NOVA VOLTA RÁPIDA!'}</span>
-               <span className="text-5xl font-black italic tracking-tighter text-[#39FF14]">{fastLapPopup.time}</span>
+         <div className="absolute bottom-8 right-8 z-50 flex flex-col items-end drop-shadow-2xl animate-pulse">
+            <div className="bg-black/90 backdrop-blur-md px-8 py-3 border-t-4 flex flex-col items-center justify-center gap-1" style={{borderColor: fastLapPopup.color, boxShadow: `0 0 30px ${fastLapPopup.color}66`}}>
+               <span className="text-xl font-bold tracking-widest uppercase" style={{color: fastLapPopup.color}}>{fastLapPopup.isInitial ? 'TEMPO DE REFERÊNCIA' : 'NOVA VOLTA RÁPIDA!'}</span>
+               <span className="text-5xl font-black italic tracking-tighter text-white" style={{textShadow: `0 0 15px ${fastLapPopup.color}`}}>{fastLapPopup.time}</span>
             </div>
-            <div className="bg-black/90 text-white px-12 py-2 w-full text-center border-b-8" style={{borderBottomColor: fastLapPopup.color}}>
-               <span className="text-2xl font-black tracking-widest uppercase" style={{color: fastLapPopup.color}}>{fastLapPopup.name}</span>
+            <div className="text-black px-12 py-2 w-full text-center border-b-8 border-black font-black flex justify-center items-center" style={{backgroundColor: fastLapPopup.color}}>
+               <span className="text-2xl tracking-widest uppercase">{fastLapPopup.name}</span>
             </div>
          </div>
       )}
@@ -1216,15 +1236,15 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
             <div className="absolute top-16 right-4 z-10 flex flex-col items-end gap-1.5 opacity-70 hover:opacity-100 transition-opacity">
                <span className="text-[9.5px] text-white font-mono bg-black/60 px-2.5 py-1 rounded inline-flex items-center border border-gray-800">
                   <span className="text-gray-400 mr-2">ACEL/TRAV:</span> 
-                  <KeyCap k={fmtKey(p.controls?.up, 'Q')} /> 
+                  <KeyCap k={fmtKey(p.controls?.up, 'Up')} /> 
                   <span className="mx-1 text-gray-500">/</span> 
-                  <KeyCap k={fmtKey(p.controls?.down, 'A')} />
+                  <KeyCap k={fmtKey(p.controls?.down, 'Down')} />
                </span>
                <span className="text-[9.5px] text-white font-mono bg-black/60 px-2.5 py-1 rounded inline-flex items-center border border-gray-800">
                   <span className="text-gray-400 mr-2">DIREÇÃO:</span> 
-                  <KeyCap k={fmtKey(p.controls?.left, 'O')} /> 
+                  <KeyCap k={fmtKey(p.controls?.left, 'Left')} /> 
                   <span className="mx-1 text-gray-500">/</span> 
-                  <KeyCap k={fmtKey(p.controls?.right, 'P')} />
+                  <KeyCap k={fmtKey(p.controls?.right, 'Right')} />
                </span>
                <div className="text-[9.5px] text-white font-mono bg-black/60 px-2.5 py-1 rounded mt-1 flex items-center border border-gray-800">
                   <span className="text-gray-400 mr-2">CÂMARA:</span>
