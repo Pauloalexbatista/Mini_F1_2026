@@ -33,12 +33,16 @@ export default function App() {
   const [globalRoster, setGlobalRoster] = useState<any[]>([]);
   const [lobbyState, setLobbyState] = useState<any[]>([]);
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
+  // Frozen player list captured at race-start so mid-race lobby changes never reinitialize cars
+  const [racePlayers, setRacePlayers] = useState<PlayerConfig[]>([]);
   
   const [appState, setAppState] = useState<'menu' | 'playing' | 'builder'>('menu');
 
   // Use a ref so the socket handler always reads the latest dbTracks without re-subscribing
   const dbTracksRef = useRef<TrackDef[]>([]);
   useEffect(() => { dbTracksRef.current = dbTracks; }, [dbTracks]);
+  // Mirror for computed activePlayers so socket handlers can read without stale closure
+  const activePlayersRef = useRef<PlayerConfig[]>([]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -155,8 +159,9 @@ export default function App() {
                 setSelectedTracks(data.tracks);
                 setTotalLaps(data.laps || 1);
             }
-            // Use ref so we never get a stale empty array from the closure
             if (dbTracksRef.current.length > 0) {
+               // Freeze the player list at race-start so mid-race lobby changes don't restart cars
+               setRacePlayers([...activePlayersRef.current]);
                setAppState('playing');
             }
         };
@@ -187,6 +192,7 @@ export default function App() {
         if (socket.connected && activeEventId) {
             socket.emit('start_race', { tracks: selectedTracks, laps: totalLaps });
         } else {
+            setRacePlayers([...activePlayers]); // Freeze solo lineup
             setAppState('playing');
         }
     } else {
@@ -355,6 +361,9 @@ export default function App() {
       }
   }
 
+  // Always keep ref in sync with latest activePlayers (used by socket handlers)
+  activePlayersRef.current = activePlayers;
+
   if (appState === 'builder') {
     return <TrackBuilder onExit={() => setAppState('menu')} onTestTrack={handleTestTrack} />;
   }
@@ -415,7 +424,7 @@ export default function App() {
       {appState === 'playing' && (
         <Game 
           key={`race-${currentChampionshipRaceIndex}`}
-          players={activePlayers} 
+          players={racePlayers.length > 0 ? racePlayers : activePlayers} 
           track={dbTracks.find(t => t.id === selectedTracks[currentChampionshipRaceIndex]) || dbTracks[0]}
           totalLaps={totalLaps}
           onBackToMenu={handleBackToMenu} 
