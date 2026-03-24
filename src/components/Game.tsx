@@ -779,7 +779,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
       GAME_WIDTH = canvasRef.current.width;
       GAME_HEIGHT = canvasRef.current.height;
 
-      const mainCar = carsRef.current.find(c => !c.isBot) || carsRef.current[0];
+      // CRITICAL: In multiplayer, target YOUR OWN car (isLocal), not just the first non-bot
+      const mainCar = carsRef.current.find(c => c.isLocal) || carsRef.current.find(c => !c.isBot) || carsRef.current[0];
       const speed = Math.sqrt(mainCar.vx*mainCar.vx + mainCar.vy*mainCar.vy);
       
       // Dynamic zoom based on speed + Cinematic Intro / Outro
