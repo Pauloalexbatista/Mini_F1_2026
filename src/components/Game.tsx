@@ -29,6 +29,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
   const [startSequence, setStartSequence] = useState(isSetupPhase ? 0 : 1); 
   const [, setForceRender] = useState(0);
   const [cameraModeUI, setCameraModeUI] = useState<'CENTRAL' | 'DYNAMIC' | 'QUADRANTS'>('CENTRAL');
+  const [localSetupReady, setLocalSetupReady] = useState(false); // true after clicking IR PARA A PISTA
   const globalBestLapRef = useRef<number>(Infinity);
   const [fastLapPopup, setFastLapPopup] = useState<{name: string, time: string, color: string, isInitial: boolean} | null>(null);
   
@@ -148,6 +149,17 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
     }
     return () => clearTimeout(timer);
   }, [startSequence, isSetupPhase]);
+
+  // Listen for Parc Ferme all_setup_ready signal
+  useEffect(() => {
+     const onAllSetupReady = () => {
+        setIsSetupPhase(false);
+        setStartSequence(1);
+        setForceRender(Date.now());
+     };
+     socket.on('all_setup_ready', onAllSetupReady);
+     return () => { socket.off('all_setup_ready', onAllSetupReady); };
+  }, []);
 
   // Listen for Multiplayer Telemetry
   useEffect(() => {
@@ -1180,169 +1192,34 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
             </div>
           </div>
 
-          <button 
-             onClick={() => {
-                  setIsSetupPhase(false);
-                  setStartSequence(1);
-                  // Force a re-render frame reset to clear any blurred canvas artifacts
-                  setForceRender(Date.now());
-               }}
-               className="px-12 py-5 bg-green-600 hover:bg-green-500 text-white font-black text-3xl tracking-tighter italic transition-colors rounded shadow-[0_0_40px_rgba(22,163,74,0.4)] flex items-center group"
-            >
-               IR PARA A PISTA
-               <svg className="w-8 h-8 ml-3 transform group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-            </button>
-         </div>
-      )}
-      
-      {/* Global Fastest Lap Popup HUD */}
-      {fastLapPopup && !raceFinished && startSequence >= 4 && (
-         <div className="absolute bottom-8 right-8 z-50 flex flex-col items-end drop-shadow-2xl animate-pulse">
-            <div className="bg-black/90 backdrop-blur-md px-8 py-3 border-t-4 flex flex-col items-center justify-center gap-1" style={{borderColor: fastLapPopup.color, boxShadow: `0 0 30px ${fastLapPopup.color}66`}}>
-               <span className="text-xl font-bold tracking-widest uppercase" style={{color: fastLapPopup.color}}>{fastLapPopup.isInitial ? 'TEMPO DE REFERÊNCIA' : 'NOVA VOLTA RÁPIDA!'}</span>
-               <span className="text-5xl font-black italic tracking-tighter text-white" style={{textShadow: `0 0 15px ${fastLapPopup.color}`}}>{fastLapPopup.time}</span>
-            </div>
-            <div className="text-black px-12 py-2 w-full text-center border-b-8 border-black font-black flex justify-center items-center" style={{backgroundColor: fastLapPopup.color}}>
-               <span className="text-2xl tracking-widest uppercase">{fastLapPopup.name}</span>
-            </div>
-         </div>
-      )}
-      
-      {!isSetupPhase && !raceFinished && startSequence >= 4 && (
-         <div className="absolute bottom-8 left-0 flex flex-col gap-2 z-10 pointer-events-none">
-            {players.filter(p => !p.isBot).map(p => {
-               const car = carsRef.current.find(c => c.id === p.id);
-               if (!car) return null;
-               
-               return (
-                 <div key={p.id} className="bg-black/80 border-l-4 p-3 rounded-r-xl w-64 shadow-2xl flex flex-col backdrop-blur-md" style={{borderColor: p.color}}>
-                    <span className="text-white font-black text-xl italic tracking-tighter uppercase">{p.driverName || 'P'+p.id}</span>
-                    <div className="flex justify-between items-end mt-1">
-                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Tempo <span id={`hud-time-${p.id}`} className="text-yellow-400 font-mono text-base ml-1">00:00.00</span></span>
-                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">L<span id={`hud-lap-${p.id}`} className="text-white font-black text-base ml-1">1/{totalLaps}</span></span>
-                    </div>
-                    
-                    <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-800">
-                         <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest flex flex-col">
-                            Última <span id={`hud-last-${p.id}`} className="font-mono text-white text-xs">--:--.--</span>
-                         </span>
-                         <span className="text-[9px] text-[#E10600] font-bold uppercase tracking-widest flex flex-col text-right">
-                            Melhor <span id={`hud-best-${p.id}`} className="font-mono text-white text-xs">--:--.--</span>
-                         </span>
-                    </div>
-                 </div>
-               );
-            })}
-         </div>
-      )}
-
-      {/* HUD Control Hints List */}
-      {!isSetupPhase && !raceFinished && startSequence >= 4 && (() => {
-         const p = players.find(player => !player.isBot);
-         if (!p) return null;
-         
-         // Fix ts undefined fallback explicitly
-         const fmtKey = (k?: string, def: string = '') => (k || def).replace('Key', '').replace('Arrow', '');
-         const KeyCap = ({ k, color = 'text-black' }: { k: string, color?: string }) => (
-            <kbd className={`bg-white ${color} px-1.5 py-0.5 rounded shadow-[0_1px_0_#ccc] font-black mx-0.5`}>{k}</kbd>
-         );
-         
-         return (
-            <div className="absolute top-16 right-4 z-10 flex flex-col items-end gap-1.5 opacity-70 hover:opacity-100 transition-opacity">
-               <span className="text-[9.5px] text-white font-mono bg-black/60 px-2.5 py-1 rounded inline-flex items-center border border-gray-800">
-                  <span className="text-gray-400 mr-2">ACEL/TRAV:</span> 
-                  <KeyCap k={fmtKey(p.controls?.up, 'Up')} /> 
-                  <span className="mx-1 text-gray-500">/</span> 
-                  <KeyCap k={fmtKey(p.controls?.down, 'Down')} />
-               </span>
-               <span className="text-[9.5px] text-white font-mono bg-black/60 px-2.5 py-1 rounded inline-flex items-center border border-gray-800">
-                  <span className="text-gray-400 mr-2">DIREÇÃO:</span> 
-                  <KeyCap k={fmtKey(p.controls?.left, 'Left')} /> 
-                  <span className="mx-1 text-gray-500">/</span> 
-                  <KeyCap k={fmtKey(p.controls?.right, 'Right')} />
-               </span>
-               <div className="text-[9.5px] text-white font-mono bg-black/60 px-2.5 py-1 rounded mt-1 flex items-center border border-gray-800">
-                  <span className="text-gray-400 mr-2">CÂMARA:</span>
-                  <KeyCap k={fmtKey(p.controls?.camera, 'C')} color="text-[#E10600]" />
-                  <span className="text-gray-300 ml-2">{cameraModeUI === 'CENTRAL' ? 'CLÁSSICA CENTRAL' : (cameraModeUI === 'DYNAMIC' ? 'DINÂMICA' : 'QUADRANTES')}</span>
-               </div>
-            </div>
-         );
-      })()}
-      
-      {!raceFinished && (
-        <button onClick={onBackToMenu} className="fixed top-4 right-4 bg-red-600 text-white font-bold px-4 py-2 hover:bg-red-700 z-50 rounded-lg shadow-lg text-sm tracking-wider uppercase">
-          DESISTIR
-        </button>
-      )}
-      
-      {raceFinished && (() => {
-        const sortedCars = [...carsRef.current].sort((a,b) => (a.finishTime || Infinity) - (b.finishTime || Infinity));
-        const F1_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
-        
-        let fastestLapCarId = -1;
-        let fastestLapTime = Infinity;
-        sortedCars.forEach(c => {
-           if (c.finishTime && c.finishTime !== Infinity && c.bestLapTime && c.bestLapTime > 0 && c.bestLapTime < fastestLapTime) {
-               fastestLapTime = c.bestLapTime;
-               fastestLapCarId = c.id;
-           }
-        });
-
-        return (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
-            <h1 className="text-5xl mb-8 text-white font-black italic">CLASSIFICAÇÃO</h1>
-            <div className="bg-[#15151e] border-l-4 border-[#E10600] p-8 mb-8 w-full max-w-3xl">
-              <div className="flex justify-between mb-4 text-[10px] text-gray-500 font-bold uppercase tracking-widest border-b border-gray-800 pb-2">
-                 <span>POSIÇÃO / PILOTO</span>
-                 <div className="flex space-x-12 w-1/3 justify-end text-right pr-4">
-                    <span>TEMPO</span>
-                    <span>PONTOS</span>
-                 </div>
-              </div>
-              {sortedCars.map((c, i) => {
-                const pDetails = players.find(p => p.id === c.id);
-                const name = pDetails?.driverName || (c.isBot ? 'BOT AI' : `P${c.id}`);
-                const isFinished = c.finishTime && c.finishTime !== Infinity;
-                const basePoints = (i < 10 && isFinished) ? F1_POINTS[i] : 0;
-                const isFastestLap = (c.id === fastestLapCarId);
-                const extraPoint = (isFastestLap && isFinished) ? 1 : 0;
-                const totalPoints = basePoints + extraPoint;
-
-                return (
-                  <div key={c.id} className="flex justify-between mb-2 text-xl font-black uppercase items-center" style={{color: c.color}}>
-                    <span className="flex-1 flex items-center">
-                       {i+1}º - {name}
-                       {isFastestLap && isFinished && <span className="ml-3 text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full" title="Volta Mais Rápida (+1 Pt)">FL</span>}
-                    </span>
-                    <div className="flex space-x-12 w-1/3 justify-end text-right items-center pr-4">
-                       <span className="font-mono text-sm tracking-wider w-24 text-right">{isFinished ? formatTime(c.finishTime!) : 'DNF'}</span>
-                       <span className="font-mono text-lg w-12 text-center bg-white/10 rounded pt-1 pb-1">{isFinished ? totalPoints : 0}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            <button 
-               onClick={() => {
-                  const results = sortedCars.map((c, idx) => {
-                     const pDetails = players.find(p => p.id === c.id);
-                     return {
-                        playerId: c.id,
-                        position: idx + 1,
-                        driverName: pDetails?.driverName || (c.isBot ? 'BOT AI' : `P${c.id}`)
-                     };
-                  });
-                  onBackToMenu(results);
-               }} 
-               className="px-8 py-4 bg-white text-black font-bold uppercase tracking-widest rounded transition hover:bg-gray-300"
-            >
-               CONTINUAR
-            </button>
-          </div>
-        );
-      })()}
-    </div>
-  );
-}
+          {(() => {
+            const isMultiRace = players.filter(p => !p.isBot && !p.isLocal).length > 0;
+            if (localSetupReady) {
+              return (
+                <div className="px-12 py-5 bg-gray-800 text-gray-400 font-black text-2xl tracking-tighter italic rounded flex items-center gap-4 animate-pulse">
+                  <svg className="w-6 h-6 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth="3" strokeDasharray="40" strokeDashoffset="10"/></svg>
+                  A AGUARDAR ADVERSÁRIO...
+                </div>
+              );
+            }
+            return (
+              <button
+                onClick={() => {
+                  if (isMultiRace) {
+                    // Multiplayer: signal ready, wait for all_setup_ready from server
+                    setLocalSetupReady(true);
+                    socket.emit('setup_ready');
+                  } else {
+                    // Solo: start immediately
+                    setIsSetupPhase(false);
+                    setStartSequence(1);
+                    setForceRender(Date.now());
+                  }
+                }}
+                className="px-12 py-5 bg-green-600 hover:bg-green-500 text-white font-black text-3xl tracking-tighter italic transition-colors rounded shadow-[0_0_40px_rgba(22,163,74,0.4)] flex items-center group"
+              >
+                IR PARA A PISTA
+                <svg className="w-8 h-8 ml-3 transform group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
+              </button>
+            );
+          })()}

@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
@@ -322,6 +322,21 @@ io.on('connection', (socket) => {
       io.emit('trigger_refresh_events');
   });
 
+
+  // Parc Fermé: player confirmed setup and is ready to race
+  socket.on('setup_ready', () => {
+      const p = onlinePlayers.find(x => x.socketId === socket.id);
+      if (p && p.eventId) {
+          p.setupReady = true;
+          const roomPlayers = onlinePlayers.filter(x => x.eventId === p.eventId);
+          io.to(p.eventId).emit('lobby_state', roomPlayers);
+          // Start countdown only when ALL players in the room confirmed
+          if (roomPlayers.length > 0 && roomPlayers.every(x => x.setupReady)) {
+              roomPlayers.forEach(x => { x.setupReady = false; });
+              io.to(p.eventId).emit('all_setup_ready');
+          }
+      }
+  });
   socket.on('set_ready', (isReady) => {
       const p = onlinePlayers.find(p => p.socketId === socket.id);
       if (p && p.eventId) {
