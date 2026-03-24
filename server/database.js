@@ -57,16 +57,20 @@ export async function initDB() {
     );
   `);
 
-  // Safe Migration: Add customized Garage color columns
-  try {
-      await db.exec("ALTER TABLE users ADD COLUMN primary_color TEXT DEFAULT '#E10600';");
-      await db.exec("ALTER TABLE users ADD COLUMN secondary_color TEXT DEFAULT '#000000';");
-      await db.exec("ALTER TABLE users ADD COLUMN helmet_color TEXT DEFAULT '#FFDD00';");
-      await db.exec("ALTER TABLE users ADD COLUMN controls TEXT;");
-      console.log("[DB] Added custom color columns and controls to users table.");
-  } catch (e) {
-      // Columns likely already exist
-  }
+  const addColumn = async (colDef) => {
+    try {
+      await db.exec(`ALTER TABLE users ADD COLUMN ${colDef};`);
+    } catch (e) {
+      // Ignorar erros de colunas duplicadas
+    }
+  };
+
+  await addColumn("primary_color TEXT DEFAULT '#E10600'");
+  await addColumn("secondary_color TEXT DEFAULT '#000000'");
+  await addColumn("helmet_color TEXT DEFAULT '#FFDD00'");
+  await addColumn("controls TEXT");
+
+  console.log("[DB] Migração e validação de colunas concluída.");
 
   return db;
 }
