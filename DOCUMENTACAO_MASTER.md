@@ -1,4 +1,4 @@
-﻿# ðŸ† REGRAS DE OURO: ARQUITETURA DA ESTRADA F1 2026
+# ðŸ† REGRAS DE OURO: ARQUITETURA DA ESTRADA F1 2026
 
 Este documento serve como a BÃ­blia MatemÃ¡tica Definitiva para a modelaÃ§Ã£o e conceÃ§Ã£o de Pistas e Caixas de Boxes no Motor GrÃ¡fico e de FÃ­sica Voronoi.
 
@@ -164,6 +164,17 @@ O backend Ã© suportado por **Node.js** e uma Base de Dados **SQLite**. Ã‰ a
 4. **Isolamento Git (Gitignore):** O ficheiro `database.sqlite` fÃ­sico local (e os seus complementos `.sqlite-wal`, `.sqlite-shm`) **JAMAIS** podem ser incluÃ­dos nos commits do Git. Foram blindados no `.gitignore`. Se o Git os arrastar para produÃ§Ã£o, irÃ£o esmagar e apagar a BD online real durante o Deploy!
 
 *(Estas regras de infraestrutura sÃ£o dogmÃ¡ticas e nÃ£o devem ser contornadas).*
+
+---
+
+## 10. SINCRONIZAÃ‡ÃƒO MULTIPLAYER (EVENT-DRIVEN ARCHITECTURE)
+
+Para mitigar dessincronizaÃ§Ãµes fatais numa arquitetura WebSockets baseada em eventos, o motor multi-jogador aplica quatro mandamentos de ferro:
+
+1. **Parc FermÃ© (Privacidade RÃ­gida):** O EcrÃ£ de setups garante "Visual Oclusion" total. Os mecÃ¢nicos do jogador X nÃ£o conseguem ver a afinaÃ§Ã£o (Asas MÃ³naco/Monza) do carro do jogador Y. As 'cards' dos adversÃ¡rios sÃ£o puramente decorativas e relatam estritamente o estado da sua rede: "A PREPARAR..." ou "PRONTO A CORRER".
+2. **Handshake de Grelha (`all_setup_ready`):** Clicar em "IR PARA A PISTA" nÃ£o inicia a corrida isoladamente em corridas multijogador. A interface transita para "A AGUARDAR ADVERSÃ RIO..." e o cronÃ³metro dos mÃ­ticos 5 Segundos Vermelhos (`startSequence`) sÃ³ pode arrancar quando o servidor Node.js efetuar o *broadcast* do sinal `all_setup_ready` (garantindo que absolutamente todos os pilotos de carne e osso detetados na sala confirmaram a via).
+3. **PersistÃªncia 'Frozen Grid' Post-Start:** Durante uma corrida longa, a sala (*Lobby*) pode sofrer flutuaÃ§Ãµes violentas de pacotes (e.g., um piloto cai de rede ou desiste a meio). Para evitar que esta alteraÃ§Ã£o provoque *re-renders* assÃ­ncronos no DOM do React forÃ§ando um recomeço letal da corrida para todos, o motor fÃ­sico arranca e isola numa clausura aspersa um "Array Congelado" (`racePlayers`), ignorando por completo perturbaÃ§Ãµes na sala originÃ¡ria.
+4. **Campeonatos Granulares (Laps por Pista):** As configuraÃ§Ãµes de um "Evento" assumem Mapas DicionÃ¡rio. Um Campeonato longo comporta-se por alocaÃ§Ãµes customizadas, permitindo agregar na exata mesma ID de evento provas Endurances (Suzuka - 7 Voltas) juntamente a Sprints curtos (MÃ³naco - 3 Voltas).
 
 ---
 
