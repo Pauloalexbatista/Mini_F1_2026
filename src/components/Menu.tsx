@@ -275,13 +275,13 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                    ALL_TRACKS.length === 0 ||
                    selectedTracks.length === 0 ||
                    // Online but no event = must create/join an event first
-                   (socket.connected && !activeEventId) ||
+                   (globalRoster.length > 0 && !activeEventId) ||
                    // In a multiplayer lobby: wait for all humans to be ready
                    (!!activeEventId && lobbyState.length > 0 && !lobbyState.every((p: any) => p.isReady))
                  }
                  className="w-full sm:flex-1 bg-[#E10600] hover:bg-red-700 text-white disabled:bg-gray-800 disabled:text-gray-500 py-3 sm:py-5 px-6 rounded text-sm sm:text-base font-black italic tracking-widest uppercase transition-colors flex items-center justify-center gap-3 disabled:cursor-not-allowed group relative overflow-hidden"
               >
-                 {socket.connected && !activeEventId ? (
+                 {globalRoster.length > 0 && !activeEventId ? (
                    'CRIAR OU JUNTAR EVENTO'
                  ) : selectedTracks.length === 0 ? (
                    'SELECIONE UMA PISTA...'
