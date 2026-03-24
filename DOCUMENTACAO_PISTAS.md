@@ -151,3 +151,16 @@ t = Clamp01([ (Carro.x - p1.x) * (p2.x - p1.x) + (Carro.y - p1.y) * (p2.y - p1.y
 VectorAlvo = p1 + t * (p2 - p1)
 ```
 Com o `VectorAlvo` exato calculado, o recuo elástico mecânico do carro na Parede Invisível deixa de obedecer a uma manta de polígonos e torna-se um arco curvo *100% liso*, garantindo sobrevivência nos apexes mais assassinos.
+
+---
+
+## 9. INFRAESTRUTURA DE SERVIDOR E PERSISTÊNCIA (COOLIFY)
+
+O backend é suportado por **Node.js** e uma Base de Dados **SQLite**. É absolutamente crítico que os futuros programadores e Agentes IA respeitem as seguintes Regras de Sobrevivência na Nuvem (VPS):
+
+1. **Containers Efémeros:** O sistema de Deploy do Coolify baseia-se em Docker. Sempre que se executa um "Force Rebuild", a máquina inteira é deitada ao lixo e substituída por uma nova a partir do GitHub. Qualquer dado gravado nas diretorias normais da app (como `/app/server/database.sqlite`) desaparece para sempre.
+2. **O Volume Persistente (O Cofre-Forte):** A Base de Dados em Produção foi codificada (em `server/database.js`) para habitar única e exclusivamente a diretoria protegida `/app/server_data`.
+3. **Mapeamento Obrigatório no Painel Cloud:** Para garantir a vida eterna das pistas construídas, é **ESTRITAMENTE OBRIGATÓRIO** no Painel do Coolify adicionar um Volume Persistente apontando estritamente para o Destination: `/app/server_data`.
+4. **Isolamento Git (Gitignore):** O ficheiro `database.sqlite` físico local (e os seus complementos `.sqlite-wal`, `.sqlite-shm`) **JAMAIS** podem ser incluídos nos commits do Git. Foram blindados no `.gitignore`. Se o Git os arrastar para produção, irão esmagar e apagar a BD online real durante o Deploy!
+
+*(Estas regras de infraestrutura são dogmáticas e não devem ser contornadas).*
