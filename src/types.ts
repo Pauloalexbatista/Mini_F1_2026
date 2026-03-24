@@ -13,11 +13,13 @@ export interface PlayerConfig {
   teamName?: string;
   driverName?: string;
   isBot: boolean;
+  isLocal?: boolean;
   setupTopSpeed?: number;
   controls?: { up: string, down: string, left: string, right: string, camera?: string };
   difficulty?: number;
   socketId?: string;
   isReady?: boolean;
+  helmetColor?: string;
 };
 
 export type GameState = 'menu' | 'playing' | 'gameover';

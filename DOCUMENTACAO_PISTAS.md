@@ -141,3 +141,13 @@ Descobre Pontes cruzando eixos onde a physicalD < 100 píxeis e a pathDist > 100
 
 **O(N) Filtro Smooth do Muro Voronoi:**
 Nas aproximações em pistas de Rua, o Muro Matemático (maxWallRadius) é encolhido estritamente para Math.max(w * 0.65, minOtherSpace / 2) (Limite absoluto: margem da Berma Branca). De forma a erradicar o efeito de \'Ondulação de Pixels\' (Scalloping), todos os muros passam num filtro Passa-Baixo (Gaussian Moving Average) através dos últimos 5 nós (SMOOTH_WINDOW = 5). Pistas em *Suzuka Mode* (Túneis/Pontes) mantêm obrigatoriamente a Cota de Proteção máxima de 1.70w.
+
+**O(N) Projeção Vectorial Física de Muros Contínuos (Anti-Dentes em Ganchos):**
+Em curvas de extrema proximidade geométrica (ex: Ganchos do COTA), calcular as colisões físicas medindo estritamente a distância para o centro de cada nó gera um erro topológico: a fronteira forma "dentes afiados" poligonais invisíveis bem dentro da pista, cortando caminho face à relva que é desenhada circularmente.
+A física v2026 resolve isto garantindo o limite via **Segmento de Reta Contínuo** e Interpolação Linear Normal de Vectores. Dado segmento matemático de `p1` a `p2`, o carro procura a projeção limpa `t`:
+```math
+L² = Distância(p1, p2)²
+t = Clamp01([ (Carro.x - p1.x) * (p2.x - p1.x) + (Carro.y - p1.y) * (p2.y - p1.y) ] / L²)
+VectorAlvo = p1 + t * (p2 - p1)
+```
+Com o `VectorAlvo` exato calculado, o recuo elástico mecânico do carro na Parede Invisível deixa de obedecer a uma manta de polígonos e torna-se um arco curvo *100% liso*, garantindo sobrevivência nos apexes mais assassinos.

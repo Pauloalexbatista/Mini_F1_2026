@@ -67,6 +67,7 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
             const safeZR = Math.max(0, maxR - 14);
             zebraSafeClip.moveTo(curr.x + safeZR, curr.y);
             zebraSafeClip.arc(curr.x, curr.y, safeZR, 0, Math.PI * 2);
+            
       }
       squeezedWallCache.set(spline, wallPath);
       squeezedGrassCache.set(spline, grassSafeClip);
@@ -80,8 +81,6 @@ export function drawTrack(ctx: CanvasRenderingContext2D, spline: SplineNode[], p
   // Relva Interna do GP (Verde mais claro natural)
   ctx.fillStyle = '#3a692a';
   ctx.fill(squeezedGrassCache.get(spline)!);
-
-  // ZONA LIMPA DE NEON: Remoção definitiva do Debug de Limites para devolver o visual 100% fotorealista da Relva Clássica!
 
   // ==========================================
   // REGRA 2: PIT LANE COM MUROS E ZEBRAS (Relva = 0)
@@ -688,7 +687,7 @@ export function drawEnvironments(ctx: CanvasRenderingContext2D, spline: SplineNo
       if (isNewCache) environmentCollisionCache.set(spline, colCache);
 }
 
-export function drawF1Car(ctx: CanvasRenderingContext2D, pColor: string, sColor: string, drsEnabled = false) {
+export function drawF1Car(ctx: CanvasRenderingContext2D, pColor: string, sColor: string, helmetColor: string = '#FFDD00', drsEnabled = false) {
   // Main body (Secondary Color / Carbon base)
   ctx.fillStyle = sColor || '#222';
   ctx.beginPath();
@@ -741,7 +740,7 @@ export function drawF1Car(ctx: CanvasRenderingContext2D, pColor: string, sColor:
   drawWheel(8, 8);     
 
   // Helmet
-  ctx.fillStyle = '#FFDD00';
+  ctx.fillStyle = helmetColor;
   ctx.beginPath(); ctx.arc(-2, 0, 3, 0, Math.PI*2); ctx.fill();
 
   // F1 2026 Halo (Titanium structure)
@@ -749,6 +748,88 @@ export function drawF1Car(ctx: CanvasRenderingContext2D, pColor: string, sColor:
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.arc(-2, 0, 3, -1.5, 1.5);
+  ctx.stroke();
+}
+
+export function drawMoto(ctx: CanvasRenderingContext2D, pColor: string, sColor: string, helmetColor: string = '#FFDD00') {
+  // Moto Chassis
+  ctx.fillStyle = sColor;
+  ctx.fillRect(-12, -3, 24, 6);
+  // Tank/Fairing
+  ctx.fillStyle = pColor;
+  ctx.fillRect(-5, -4, 15, 8);
+  ctx.beginPath(); ctx.moveTo(10, -4); ctx.lineTo(18, -1); ctx.lineTo(18, 1); ctx.lineTo(10, 4); ctx.fill();
+  
+  // Wheels
+  ctx.fillStyle = '#111';
+  ctx.fillRect(14, -2, 6, 4); // Front
+  ctx.fillRect(-16, -3, 8, 6); // Rear
+  
+  // Pilot Helmet & Shoulders
+  ctx.fillStyle = pColor;
+  ctx.beginPath(); ctx.arc(-2, 0, 4, 0, Math.PI*2); ctx.fill(); // shoulders
+  ctx.fillStyle = helmetColor;
+  ctx.beginPath(); ctx.arc(1, 0, 3, 0, Math.PI*2); ctx.fill(); // helmet
+}
+
+export function drawDriftCar(ctx: CanvasRenderingContext2D, pColor: string, sColor: string) {
+  // Main Body (JDM Coupe)
+  ctx.fillStyle = pColor;
+  ctx.fillRect(-14, -8, 28, 16);
+  
+  // Roof
+  ctx.fillStyle = sColor;
+  ctx.fillRect(-5, -7, 12, 14); 
+  
+  // Windows
+  ctx.fillStyle = '#111';
+  ctx.fillRect(5, -6, 4, 12); // windshield
+  ctx.fillRect(-8, -6, 2, 12); // rear window
+  
+  // Spoiler
+  ctx.fillStyle = sColor;
+  ctx.fillRect(-16, -9, 3, 18);
+  
+  // Wheels (Stanced)
+  const wheelColor = '#222';
+  ctx.fillStyle = wheelColor;
+  ctx.fillRect(8, -10, 6, 3);
+  ctx.fillRect(8, 7, 6, 3);
+  ctx.fillRect(-12, -11, 7, 4);
+  ctx.fillRect(-12, 7, 7, 4);
+}
+
+export function drawRallyCar(ctx: CanvasRenderingContext2D, pColor: string, sColor: string) {
+  // Main Body (Compact Hatchback)
+  ctx.fillStyle = pColor;
+  ctx.beginPath();
+  ctx.moveTo(-12, -9); ctx.lineTo(12, -8); ctx.lineTo(14, -5);
+  ctx.lineTo(14, 5); ctx.lineTo(12, 8); ctx.lineTo(-12, 9);
+  ctx.fill();
+  
+  // Roof 
+  ctx.fillStyle = sColor;
+  ctx.fillRect(-4, -7, 10, 14);
+  // Scoop
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, -2, 3, 4); 
+  
+  // Windows
+  ctx.fillStyle = '#222';
+  ctx.fillRect(6, -6, 3, 12);
+  
+  // Mudflaps
+  ctx.fillStyle = '#E10600';
+  ctx.fillRect(-13, -11, 2, 4);
+  ctx.fillRect(-13, 7, 2, 4);
+  
+  // Thick Wheels
+  ctx.fillStyle = '#222';
+  ctx.fillRect(7, -11, 6, 4);
+  ctx.fillRect(7, 7, 6, 4);
+  ctx.fillRect(-11, -11, 6, 4);
+  ctx.fillRect(-11, 7, 6, 4);
+
   ctx.stroke();
 }
 

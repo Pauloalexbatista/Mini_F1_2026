@@ -148,7 +148,10 @@ export const TrackBuilder: React.FC<TrackBuilderProps> = ({ onExit, onTestTrack 
       for (let i = 1; i < pitPoints.length; i++) pitPath += ` L ${Math.round(pitPoints[i].x)},${Math.round(pitPoints[i].y)}`;
     }
 
-    const trackId = trackName.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'custom_track';
+    const baseId = trackName.toLowerCase().replace(/[^a-z0-9]/g, '_') || 'custom_track';
+    // Append a absolute timestamp to guarantee the DB never OVERWRITES an existing track just because it has the same name
+    const trackId = `${baseId}_${Date.now()}`;
+
     
     // Process math strictly identically to booting up standard tracks
     const nodes = parseStudioToNodes(mainPath, 15.0, 250, true);

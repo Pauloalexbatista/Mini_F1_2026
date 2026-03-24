@@ -1,22 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { TEAM_LIVERIES } from '../App';
-import { drawF1Car } from '../renderer';
+import { drawF1Car, drawMoto, drawDriftCar, drawRallyCar } from '../renderer';
 
-function ProfileCarPreview({ p, s }: { p: string, s: string }) {
+function ProfileCarPreview({ type, p, s, h }: { type: 'F1'|'MOTO'|'DRIFT'|'RALLY', p: string, s: string, h: string }) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   useEffect(() => {
      const canvas = canvasRef.current;
      if (!canvas) return;
      const ctx = canvas.getContext('2d');
      if (!ctx) return;
-     ctx.clearRect(0,0, 300, 100);
+     ctx.clearRect(0,0, 160, 100);
      ctx.save();
-     ctx.translate(150, 50);
-     ctx.scale(4, 4);
-     drawF1Car(ctx, p, s, false);
+     ctx.translate(80, 45);
+     ctx.scale(2.5, 2.5);
+     if (type === 'F1') drawF1Car(ctx, p, s, h, false);
+     else if (type === 'MOTO') drawMoto(ctx, p, s, h);
+     else if (type === 'DRIFT') drawDriftCar(ctx, p, s);
+     else drawRallyCar(ctx, p, s);
      ctx.restore();
-  }, [p, s]);
-  return <canvas ref={canvasRef} width={300} height={100} className="block mx-auto mb-4" />;
+  }, [type, p, s, h]);
+  return (
+    <div className="relative flex flex-col items-center">
+       <canvas ref={canvasRef} width={160} height={100} className="block" />
+       
+       <div className="flex items-center gap-2 mt-2">
+           <span className={`text-[10px] font-bold uppercase tracking-widest ${type === 'F1' ? 'text-[#E10600]' : 'text-gray-400'}`}>
+               {type === 'F1' ? 'F1 2026' : type}
+           </span>
+           {type !== 'F1' && (
+               <span className="text-[7px] font-black text-yellow-500 bg-black/95 px-1 py-0.5 border border-yellow-600 rounded tracking-widest uppercase">Brevemente</span>
+           )}
+       </div>
+    </div>
+  );
 }
 
 interface ProfileProps {
@@ -29,7 +44,9 @@ interface ProfileProps {
 
 export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: ProfileProps) {
   const [pilotName, setPilotName] = useState(user.pilot_name || '');
-  const [selectedCarId, setSelectedCarId] = useState(user.selected_car_id || 1);
+  const [primaryColor, setPrimaryColor] = useState(user.primary_color || '#E10600');
+  const [secondaryColor, setSecondaryColor] = useState(user.secondary_color || '#000000');
+  const [helmetColor, setHelmetColor] = useState(user.helmet_color || '#FFDD00');
   const [records, setRecords] = useState<any[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -41,7 +58,7 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
         e.preventDefault();
         const action = activeKeyConfig.action;
         const newPlayer = { ...players[0] };
-        if (!newPlayer.controls) newPlayer.controls = { up: '', down: '', left: '', right: '', camera: 'KeyC' };
+        if (!newPlayer.controls) newPlayer.controls = { up: 'KeyQ', down: 'KeyA', left: 'KeyO', right: 'KeyP', camera: 'KeyC' };
         newPlayer.controls[action] = e.code;
         onUpdatePlayer(0, newPlayer);
         setActiveKeyConfig(null);
@@ -53,7 +70,9 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
 
   const renderKeyButton = (action: string, label: string) => {
     const isActive = activeKeyConfig?.action === action;
-    const keyName = players[0]?.controls?.[action]?.replace('Key', '')?.replace('Arrow', '') || 'N/A';
+    const rawKey = players[0]?.controls?.[action as keyof typeof players[0]['controls']];
+    const defaultKey = action === 'camera' ? 'KeyC' : 'N/A';
+    const keyName = (rawKey || defaultKey).replace('Key', '').replace('Arrow', '');
     
     return (
       <div className="flex justify-between items-center bg-gray-100 px-3 py-2 rounded">
@@ -97,10 +116,21 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
            'Content-Type': 'application/json',
            'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ pilot_name: pilotName, selected_car_id: selectedCarId })
+        body: JSON.stringify({ 
+           pilot_name: pilotName,
+           primary_color: primaryColor,
+           secondary_color: secondaryColor,
+           helmet_color: helmetColor
+        })
       });
       if (res.ok) {
-        setUser({ ...user, pilot_name: pilotName, selected_car_id: selectedCarId });
+        setUser({ 
+           ...user, 
+           pilot_name: pilotName,
+           primary_color: primaryColor,
+           secondary_color: secondaryColor,
+           helmet_color: helmetColor
+        });
         onBack();
       }
     } catch (e) {
@@ -109,7 +139,7 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
     setIsSaving(false);
   };
 
-  const selectedTeam = TEAM_LIVERIES[selectedCarId - 1] || TEAM_LIVERIES[0];
+
 
   const formatTime = (ms: number) => {
     if (ms === Infinity) return '---';
@@ -155,22 +185,30 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
              </div>
 
              <div className="mb-6">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Carro / Equipa Oficial</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">A Minha Máquina F1</label>
                 
-                <select
-                   value={selectedCarId}
-                   onChange={(e) => setSelectedCarId(parseInt(e.target.value))}
-                   className="w-full bg-[#1e1e24] text-white p-3 border-b-2 border-transparent focus:border-[#E10600] outline-none font-black text-lg uppercase tracking-tighter transition-all mb-6 cursor-pointer"
-                >
-                   {TEAM_LIVERIES.map((team, idx) => (
-                      <option key={idx} value={idx + 1} className="bg-[#15151e] tracking-widest text-sm">
-                         {team.name}
-                      </option>
-                   ))}
-                </select>
+                <div className="flex gap-4 mb-6">
+                   <div className="flex-1">
+                      <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1">Primária</label>
+                      <input type="color" title="Cor Primária" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} className="w-full h-12 border-0 bg-transparent cursor-pointer p-0" />
+                   </div>
+                   <div className="flex-1">
+                      <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1">Secundária</label>
+                      <input type="color" title="Cor Secundária" value={secondaryColor} onChange={e => setSecondaryColor(e.target.value)} className="w-full h-12 border-0 bg-transparent cursor-pointer p-0" />
+                   </div>
+                   <div className="flex-1">
+                      <label className="block text-[10px] text-gray-500 uppercase tracking-widest mb-1">Capacete</label>
+                      <input type="color" title="Cor do Capacete" value={helmetColor} onChange={e => setHelmetColor(e.target.value)} className="w-full h-12 border-0 bg-transparent cursor-pointer p-0" />
+                   </div>
+                </div>
 
-                <div className="bg-black/40 rounded-xl py-6 w-full shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] flex justify-center border border-gray-800">
-                   <ProfileCarPreview p={selectedTeam.p} s={selectedTeam.s} />
+                <div className="bg-black/40 rounded-xl py-4 w-full shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] flex justify-center border border-gray-800">
+                   <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 w-full px-2">
+                       <ProfileCarPreview type="F1" p={primaryColor} s={secondaryColor} h={helmetColor} />
+                       <ProfileCarPreview type="MOTO" p={primaryColor} s={secondaryColor} h={helmetColor} />
+                       <ProfileCarPreview type="DRIFT" p={primaryColor} s={secondaryColor} h={helmetColor} />
+                       <ProfileCarPreview type="RALLY" p={primaryColor} s={secondaryColor} h={helmetColor} />
+                   </div>
                 </div>
              </div>
 

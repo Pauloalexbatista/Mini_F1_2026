@@ -21,6 +21,8 @@ export interface CarPhysics {
 
   color: string;
   isBot: boolean;
+  isLocal?: boolean;
+  remoteTarget?: { x: number, y: number, a: number };
   givenUp: boolean;
   damage: number;
   tireHealth: number; 

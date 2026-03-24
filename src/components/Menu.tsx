@@ -1,77 +1,43 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PlayerConfig } from '../types';
 import { TRACKS as DEFAULT_TRACKS, TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
-import { drawTrack, drawF1Car } from '../renderer';
-import { TEAM_LIVERIES } from '../App';
+import { drawTrack, drawF1Car, drawMoto, drawDriftCar, drawRallyCar } from '../renderer';
+import { TrackPreview } from './TrackPreview';
 import { socket } from '../socket';
 
-function MenuCarPreview({ p, s }: { p: string, s?: string }) {
+function MenuCarPreview({ type, p, s, h }: { type: 'F1'|'MOTO'|'DRIFT'|'RALLY', p: string, s?: string, h?: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
      const canvas = canvasRef.current;
      if (!canvas) return;
      const ctx = canvas.getContext('2d');
      if (!ctx) return;
-     ctx.clearRect(0,0, 180, 60);
+     ctx.clearRect(0,0, 160, 100);
      ctx.save();
-     ctx.translate(90, 30);
-     ctx.scale(2.5, 2.5);
-     drawF1Car(ctx, p, s || '#222', false);
+     ctx.translate(80, 50);
+     ctx.scale(3, 3);
+     if (type === 'F1') drawF1Car(ctx, p, s || '#222', h || '#FFDD00', false);
+     else if (type === 'MOTO') drawMoto(ctx, p, s || '#222', h || '#FFDD00');
+     else if (type === 'DRIFT') drawDriftCar(ctx, p, s || '#222');
+     else drawRallyCar(ctx, p, s || '#222');
      ctx.restore();
-  }, [p, s]);
-  return <canvas ref={canvasRef} width={180} height={60} className="block mx-auto" />;
-}
-
-function TrackPreview({ track }: { track: TrackDef }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    if (track.nodes.length > 0) {
-      const spline = track.nodes;
-      const pitSpline = track.pitNodes ? track.pitNodes : null;
-
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      spline.forEach(n => {
-        if (n.x < minX) minX = n.x;
-        if (n.x > maxX) maxX = n.x;
-        if (n.y < minY) minY = n.y;
-        if (n.y > maxY) maxY = n.y;
-      });
-      const pad = 500;
-      minX -= pad; maxX += pad; minY -= pad; maxY += pad;
-      const tWidth = maxX - minX;
-      const tHeight = maxY - minY;
-      
-      const scale = Math.min(canvas.width / tWidth, canvas.height / tHeight);
-      
-      ctx.save();
-      ctx.translate(canvas.width/2, canvas.height/2);
-      ctx.scale(scale, scale);
-      ctx.translate(-(minX + maxX)/2, -(minY + maxY)/2);
-      
-      drawTrack(ctx, spline, pitSpline, true);
-      ctx.restore();
-    }
-  }, [track]);
-
+  }, [type, p, s, h]);
   return (
-    <div className="relative overflow-hidden bg-[#15151e] shrink-0 w-full h-full min-h-[160px] flex items-center justify-center">
-      <canvas 
-        ref={canvasRef} 
-        width={600} 
-        height={337}
-        className="block opacity-90 object-contain w-full h-full max-h-[200px]"
-      />
+    <div className="relative flex flex-col items-center">
+       <canvas ref={canvasRef} width={160} height={100} className="block" />
+       
+       <div className="flex items-center gap-2 mt-2">
+           <span className={`text-[11px] font-black uppercase tracking-widest ${type === 'F1' ? 'text-[#E10600]' : 'text-gray-300'}`}>
+               {type === 'F1' ? 'F1 2026' : type}
+           </span>
+           {type !== 'F1' && (
+               <span className="text-[7px] font-black text-yellow-500 bg-black/95 px-1 py-0.5 border border-yellow-600 rounded tracking-widest uppercase">Brevemente</span>
+           )}
+       </div>
     </div>
   );
 }
+
 
 function TrackTelemetryDisplay({ track }: { track: TrackDef }) {
   const telemetry = React.useMemo(() => getTrackTelemetry(track.nodes), [track]);
@@ -162,10 +128,11 @@ interface MenuProps {
   onUpdatePlayer: (index: number, config: PlayerConfig) => void;
   onDeleteTrack?: (id: string) => void;
   user?: any;
+  setUser?: (u: any) => void;
   tracks: TrackDef[];
 }
 
-export default function Menu({ players, playerCount, setPlayerCount, selectedTracks, setSelectedTracks, totalLaps, setTotalLaps, onStart, onOpenBuilder, onOpenProfile, onUpdatePlayer, onDeleteTrack, user, tracks }: MenuProps) {
+export default function Menu({ players, playerCount, setPlayerCount, selectedTracks, setSelectedTracks, totalLaps, setTotalLaps, onStart, onOpenBuilder, onOpenProfile, onUpdatePlayer, onDeleteTrack, user, setUser, tracks }: MenuProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'teams' | 'tracks'>('overview');
   const [sortBy, setSortBy] = useState<'name' | 'lengthKm' | 'topSpeedKmh' | 'corners'>('name');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -257,7 +224,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
           {/* Navigation Links (Tabs) */}
           <nav className="hidden md:flex items-center gap-6 text-[13px] font-bold tracking-widest uppercase h-full pt-1">
             <button onClick={() => setActiveTab('overview')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'overview' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>Paddock</button>
-            <button onClick={() => setActiveTab('teams')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'teams' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>Teams</button>
+            <button onClick={() => setActiveTab('teams')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'teams' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>GARAGEM</button>
             <button onClick={() => setActiveTab('tracks')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'tracks' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>Tracks</button>
             <button onClick={onOpenProfile} className={`flex items-center h-full hover:text-white transition-colors border-b-2 border-transparent text-[#E10600] ml-4 hover:border-[#E10600]`}>
               <svg className="w-4 h-4 mr-1.5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -273,11 +240,15 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
 
              <button
                 onClick={onStart}
-                disabled={ALL_TRACKS.length === 0 || !players.every(p => p.isReady)}
+                disabled={ALL_TRACKS.length === 0 || selectedTracks.length === 0 || !players.every(p => p.isReady)}
                 className="w-full sm:flex-1 bg-[#E10600] hover:bg-red-700 text-white disabled:bg-gray-800 disabled:text-gray-500 py-3 sm:py-5 px-6 rounded text-sm sm:text-base font-black italic tracking-widest uppercase transition-colors flex items-center justify-center gap-3 disabled:cursor-not-allowed group relative overflow-hidden"
              >
                 {players.every(p => p.isReady) ? (
-                   <>IR PARA A <span className="hidden sm:inline ml-1">CORRIDA</span> <svg className="w-4 h-4 ml-2 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></>
+                   selectedTracks.length > 0 ? (
+                      <>IR PARA A <span className="hidden sm:inline ml-1">CORRIDA</span> <svg className="w-4 h-4 ml-2 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></>
+                   ) : (
+                      'SELECIONE UMA PISTA...'
+                   )
                 ) : (
                    'A AGUARDAR PILOTOS...'
                 )}
@@ -411,67 +382,96 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
            </div>
         )}
 
-        {/* TEAMS CAROUSEL UI */}
+        {/* TEAMS CAROUSEL UI -> CHANGED TO GARAGE UI */}
         {activeTab === 'teams' && (
-           <div className="animate-in fade-in duration-500">
-             <div className="mb-6 flex justify-between items-end border-b border-gray-200 pb-4">
-                <h2 className="text-3xl font-black text-black uppercase tracking-tighter">SELECT YOUR TEAM</h2>
+           <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center min-h-[60vh]">
+             <div className="mb-6 border-b border-gray-800 pb-4 text-center w-full max-w-4xl">
+                <h2 className="text-4xl font-black text-white uppercase tracking-tighter italic">A TUA GARAGEM</h2>
+                <p className="text-gray-500 font-bold uppercase tracking-widest mt-2">Configura a tua máquina para a próxima corrida. Mais veículos chegarão no futuro.</p>
              </div>
 
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-6 w-full">
-               {TEAM_LIVERIES.map((team, idx) => {
-                  const isSelected = players[0]?.teamName === team.name;
-                  return (
-                    <div 
-                      key={team.name}
-                      onClick={() => {
-                         const newPlayer = { ...players[0] };
-                         newPlayer.color = team.p;
-                         newPlayer.color2 = team.s;
-                         newPlayer.teamName = team.name;
-                         newPlayer.driverName = team.d1;
-                         onUpdatePlayer(0, newPlayer);
-                      }}
-                      className={`cursor-pointer rounded-2xl p-6 transition-all duration-300 border-4 flex flex-col h-full ${isSelected ? 'border-[#E10600] bg-[#1a1a24] shadow-[0_15px_40px_rgba(225,6,0,0.25)] transform md:-translate-y-2 relative z-10' : 'border-gray-800 bg-[#15151e] hover:border-gray-600 hover:-translate-y-1'}`}
-                    >
-                       <div className="flex justify-between items-center mb-6">
-                          <div className="flex items-start gap-3">
-                             <div className="w-2 h-12 rounded flex-shrink-0" style={{ backgroundColor: team.p }}></div>
-                             <span className="text-white font-black uppercase text-xl md:text-2xl tracking-tighter leading-none mt-1">{team.name}</span>
-                          </div>
-                       </div>
-                       
-                       <div className="flex justify-between items-center text-gray-400 font-bold uppercase mt-auto border-t border-gray-800 pt-5 px-1 text-xs tracking-widest">
-                          <span className={players[0]?.driverName === team.d1 && isSelected ? 'text-white' : ''}>{team.d1}</span>
-                          <span className="text-[#E10600] opacity-50 px-1 text-[10px]">VS</span>
-                          <span className={players[0]?.driverName === team.d2 && isSelected ? 'text-white' : ''}>{team.d2}</span>
-                       </div>
+             <div className="w-full max-w-4xl bg-[#1a1a24] border-2 border-gray-800 rounded-2xl p-10 flex flex-col md:flex-row gap-10 items-center justify-between shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+                
+                <div className="w-full md:w-1/2 flex flex-col gap-6">
+                   <h3 className="text-white font-black text-2xl uppercase tracking-widest mb-2 border-b-2 border-[#E10600] pb-2 inline-block self-start">Classe: F1 2026</h3>
+                   
+                   <div>
+                      <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-2 font-bold shadow-sm">Cor Primária (Carroçaria)</label>
+                      <input type="color" title="Cor Primária" value={players[0]?.color || '#E10600'} onChange={e => {
+                         const np = {...players[0]}; np.color = e.target.value; onUpdatePlayer(0, np);
+                      }} className="w-full h-16 cursor-pointer bg-transparent border-0 rounded" />
+                   </div>
 
-                       <div className="mt-6 bg-black/60 rounded-xl py-6 border border-white/5 flex items-center justify-center shadow-[inset_0_5px_20px_rgba(0,0,0,0.5)]">
-                           <MenuCarPreview p={team.p} s={team.s} />
-                       </div>
-                       
-                       <div className="mt-6 flex justify-center">
-                          {isSelected ? (
-                             <span className="bg-[#E10600] text-white font-black px-8 py-3 uppercase tracking-widest rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(225,6,0,0.5)] text-sm">
-                               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                               ATIVA
-                             </span>
-                          ) : (
-                             <span className="text-gray-500 font-bold px-8 py-3 uppercase tracking-widest text-sm border-2 border-gray-700 rounded-lg group-hover:text-white group-hover:border-gray-500 transition-colors">SELECIONAR</span>
-                          )}
-                       </div>
-                    </div>
-                  )
-               })}
+                   <div>
+                      <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-2 font-bold shadow-sm">Cor Secundária (Asas/Detalhes)</label>
+                      <input type="color" title="Cor Secundária" value={players[0]?.color2 || '#000000'} onChange={e => {
+                         const np = {...players[0]}; np.color2 = e.target.value; onUpdatePlayer(0, np);
+                      }} className="w-full h-16 cursor-pointer bg-transparent border-0 rounded" />
+                   </div>
+
+                   <div>
+                      <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-2 font-bold shadow-sm">Cor do Capacete</label>
+                      <input type="color" title="Cor do Capacete" value={players[0]?.helmetColor || '#FFDD00'} onChange={e => {
+                         const np = {...players[0]}; np.helmetColor = e.target.value; onUpdatePlayer(0, np);
+                      }} className="w-full h-16 cursor-pointer bg-transparent border-0 rounded" />
+                   </div>
+                </div>
+
+                <div className="w-full md:w-1/2 flex justify-center mt-6 md:mt-0">
+                   <div className="bg-black/80 rounded-2xl p-6 border border-gray-700 shadow-[inset_0_10px_30px_rgba(0,0,0,0.8)] w-full flex flex-col items-center">
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-4 w-full mb-6">
+                         <MenuCarPreview type="F1" p={players[0]?.color || '#E10600'} s={players[0]?.color2} h={players[0]?.helmetColor} />
+                         <MenuCarPreview type="MOTO" p={players[0]?.color || '#E10600'} s={players[0]?.color2} h={players[0]?.helmetColor} />
+                         <MenuCarPreview type="DRIFT" p={players[0]?.color || '#E10600'} s={players[0]?.color2} h={players[0]?.helmetColor} />
+                         <MenuCarPreview type="RALLY" p={players[0]?.color || '#E10600'} s={players[0]?.color2} h={players[0]?.helmetColor} />
+                      </div>
+                      <div className="text-center text-gray-500 font-black italic tracking-widest uppercase text-[10px] mt-auto">MÁQUINAS EM DESENVOLVIMENTO: FÍSICAS EXCLUSIVAS</div>
+                   </div>
+                </div>
+
              </div>
-             
-             <div className="mt-4 mb-10 flex flex-col md:flex-row justify-end items-center border-t border-gray-800 pt-8 gap-6">
+
+             <div className="mt-10 mb-10 text-center w-full max-w-4xl">
                 <button 
-                  onClick={() => setActiveTab('overview')}
-                  className="bg-white text-black font-black uppercase tracking-widest px-10 py-4 pb-3 rounded-xl hover:bg-gray-300 transition-colors w-full md:w-auto text-center"
+                  onClick={async () => {
+                     // Permanently save user color to DB through API if logged in
+                     if (user) {
+                        try {
+                          await fetch('/api/me', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                            body: JSON.stringify({ 
+                               pilot_name: user.pilot_name || user.username, 
+                               primary_color: players[0]?.color, 
+                               secondary_color: players[0]?.color2, 
+                               helmet_color: players[0]?.helmetColor 
+                            })
+                          });
+                          if (setUser) {
+                              setUser({
+                                 ...user,
+                                 primary_color: players[0]?.color,
+                                 secondary_color: players[0]?.color2,
+                                 helmet_color: players[0]?.helmetColor
+                              });
+                          }
+                        } catch(e) { console.error("Failed saving Garage colors", e); }
+                     }
+                     
+                     // Send socket update across multiplayer lobby instantly
+                     socket.emit('join_lobby', {
+                         userId: user?.id || 1,
+                         driverName: user?.pilot_name || user?.username || 'PILOTO 1',
+                         teamName: 'Garagem Pessoal',
+                         color: players[0]?.color,
+                         color2: players[0]?.color2,
+                         helmetColor: players[0]?.helmetColor,
+                         controls: players[0]?.controls
+                     });
+                  }}
+                  className="w-full bg-[#E10600] text-white font-black uppercase tracking-widest px-12 py-5 rounded-xl hover:bg-white hover:text-[#E10600] transition-colors shadow-[0_0_20px_rgba(225,6,0,0.4)]"
                 >
-                  CONFIRMAR EQUIPA
+                  CONFIRMAR!
                 </button>
              </div>
            </div>

@@ -4,6 +4,8 @@ import { TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { audio } from '../audio';
 import { updateCarPhysics, CarPhysics } from '../physics';
 import { drawTrack, drawEnvironments, drawF1Car, drawBridges3D } from '../renderer';
+import { TrackPreview } from './TrackPreview';
+import { socket } from '../socket';
 
 interface GameProps {
   key?: React.Key;
@@ -27,6 +29,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
   const [startSequence, setStartSequence] = useState(isSetupPhase ? 0 : 1); 
   const [, setForceRender] = useState(0);
   const [cameraModeUI, setCameraModeUI] = useState<'CENTRAL' | 'DYNAMIC' | 'QUADRANTS'>('CENTRAL');
+  const globalBestLapRef = useRef<number>(Infinity);
+  const [fastLapPopup, setFastLapPopup] = useState<{name: string, time: string, color: string, isInitial: boolean} | null>(null);
   
   const carsRef = useRef<CarPhysics[]>([]);
   const keysRef = useRef<{ [key: string]: boolean }>({});
@@ -39,6 +43,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
   const lookAheadRef = useRef<{x: number, y: number}>({x: 0, y: 0});
   const skidMarksRef = useRef<{x: number, y: number, a: number, w: number}[]>([]);
   const camAngleRef = useRef<number>(0);
+  const lastEmitRef = useRef<number>(0);
   
   const rawTrack = track;
   const spline = React.useMemo(() => rawTrack.nodes, [rawTrack]);
@@ -141,6 +146,24 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
     return () => clearTimeout(timer);
   }, [startSequence, isSetupPhase]);
 
+  // Listen for Multiplayer Telemetry
+  useEffect(() => {
+     if (isSetupPhase) return;
+     const onRemoteTick = (data: any) => {
+        const car = carsRef.current.find(c => c.id === data.id);
+        if (car && !car.isLocal && !car.isBot) {
+           car.remoteTarget = { x: data.x, y: data.y, a: data.a };
+           car.vx = data.vx;
+           car.vy = data.vy;
+           car.steer = data.s;
+           car.brake = data.b;
+           car.throttle = data.t;
+        }
+     };
+     socket.on('remote_tick', onRemoteTick);
+     return () => { socket.off('remote_tick', onRemoteTick); };
+  }, [isSetupPhase]);
+
   // Keys
   useEffect(() => {
     const down = (e: KeyboardEvent) => { 
@@ -242,15 +265,14 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
           // Calculate absolute speed required globally for AI physics, Skid Marks and DRS limits
           const speed = Math.sqrt(car.vx*car.vx + car.vy*car.vy);
 
-          // 1. Find Closest Spline Node with Temporal Coherence (Supports 3D Bridges!)
+          // 1. Find Closest Spline Segment
           let minSplineDistSq = Infinity;
           let closestIndex = car.currentWaypoint;
+          let resolveX = car.x;
+          let resolveY = car.y;
           
           let searchRange = spline.length; 
           if (car.currentWaypoint > 0) {
-             // Ao limitar a pesquisa aos 400 nós mais próximos do carro (8.000 pixels de pista),
-             // garantimos que quando o carro passa debaixo de uma ponte, ele NÃO faz "snap" matemático
-             // para o nó da ponte lá em cima (que pode estar milissegundos mais perto fisicamente mas a léguas de distância na Corrida!).
              searchRange = 400; 
           }
 
@@ -258,10 +280,26 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
              let i = (car.currentWaypoint - searchRange + s + spline.length) % spline.length;
              if (searchRange === spline.length && s >= spline.length) break;
              
-             const distSq = (car.x - spline[i].x)**2 + (car.y - spline[i].y)**2;
+             let nextI = (i + 1) % spline.length;
+             const p1 = spline[i];
+             const p2 = spline[nextI];
+             
+             const l2 = (p1.x - p2.x)**2 + (p1.y - p2.y)**2;
+             let t = 0;
+             if (l2 > 0) {
+                 t = ((car.x - p1.x) * (p2.x - p1.x) + (car.y - p1.y) * (p2.y - p1.y)) / l2;
+                 t = Math.max(0, Math.min(1, t));
+             }
+             
+             const projX = p1.x + t * (p2.x - p1.x);
+             const projY = p1.y + t * (p2.y - p1.y);
+             const distSq = (car.x - projX)**2 + (car.y - projY)**2;
+             
              if (distSq < minSplineDistSq) {
                minSplineDistSq = distSq;
-               closestIndex = i;
+               closestIndex = t < 0.5 ? i : nextI;
+               resolveX = projX;
+               resolveY = projY;
              }
           }
           
@@ -269,19 +307,36 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
           const distToCenter = Math.sqrt(minSplineDistSq);
           const trackWidth = closestNode.width;
           
-          // 2. Identify Pit Lane Proximity
+          // 2. Identify Pit Lane Segment Proximity
           let pitDistToCenter = Infinity;
           let closestPitIndex = -1;
+          let pitResolveX = car.x;
+          let pitResolveY = car.y;
+          
           if (pitSpline) {
-            for (let i = 0; i < pitSpline.length; i++) {
-              const pDistSq = (car.x - pitSpline[i].x)**2 + (car.y - pitSpline[i].y)**2;
+            for (let i = 0; i < pitSpline.length - 1; i++) {
+              const p1 = pitSpline[i];
+              const p2 = pitSpline[i+1];
+              
+              const l2 = (p1.x - p2.x)**2 + (p1.y - p2.y)**2;
+              let t = 0;
+              if (l2 > 0) {
+                  t = ((car.x - p1.x) * (p2.x - p1.x) + (car.y - p1.y) * (p2.y - p1.y)) / l2;
+                  t = Math.max(0, Math.min(1, t));
+              }
+              const projX = p1.x + t * (p2.x - p1.x);
+              const projY = p1.y + t * (p2.y - p1.y);
+              const pDistSq = (car.x - projX)**2 + (car.y - projY)**2;
+
               if (pDistSq < pitDistToCenter) {
                  pitDistToCenter = pDistSq;
-                 closestPitIndex = i;
+                 closestPitIndex = t < 0.5 ? i : i+1;
+                 pitResolveX = projX;
+                 pitResolveY = projY;
               }
             }
+            pitDistToCenter = Math.sqrt(pitDistToCenter);
           }
-          pitDistToCenter = Math.sqrt(pitDistToCenter);
 
           // 3. Determine Surface & Pit Lane Status
           let surface: 'TRACK' | 'CURB' | 'CURB_WIDE' | 'CURB_APEX' | 'GRASS' = 'TRACK';
@@ -321,23 +376,25 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
 
           if (isOutsideMain && isOutsidePit) {
              // Car is hitting a wall! Which wall? The one it is closest to resolving!
-             let resolveNode = closestNode;
+             let resX = resolveX;
+             let resY = resolveY;
              let resolveDist = distToCenter;
              let resolveRadius = mainWallRadius;
              
              if (pitSpline && (pitDistToCenter - pitWallRadius) < (distToCenter - mainWallRadius)) {
-                 resolveNode = pitSpline[closestPitIndex];
+                 resX = pitResolveX;
+                 resY = pitResolveY;
                  resolveDist = Math.max(0.1, pitDistToCenter); // Prevent division by zero
                  resolveRadius = pitWallRadius;
              } else {
                  resolveDist = Math.max(0.1, distToCenter);
              }
              
-             // Push car back inside the boundary
-             const nx = (car.x - resolveNode.x) / resolveDist;
-             const ny = (car.y - resolveNode.y) / resolveDist;
-             car.x = resolveNode.x + nx * (resolveRadius - 10);
-             car.y = resolveNode.y + ny * (resolveRadius - 10);
+             // Push car back inside the boundary mathematically against the precise segment projection!
+             const nx = (car.x - resX) / resolveDist;
+             const ny = (car.y - resY) / resolveDist;
+             car.x = resX + nx * (resolveRadius - 10);
+             car.y = resY + ny * (resolveRadius - 10);
              
              // Regra de Ouro F1: Chocar com o muro preto significa bater seco 0% velocidade
              car.vx = 0;
@@ -441,8 +498,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
                car.throttle = 0; // coast
                car.brake = 0;
             }
-          } else {
-            // Human (Com Ajudas de Condução F1 - "Assists")
+          } else if (car.isLocal) {
+            // Human Local (Com Ajudas de Condução F1 - "Assists")
             if (car.controls) {
               // 1. TC (Traction Control Mínimo): Corta agressividade do acelerador fora de pista
               let maxThrottle = (surface === 'GRASS') ? 0.4 : 1.0;
@@ -457,6 +514,16 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
               
               if (keysRef.current[car.controls.left]) car.steer = -steerLimit;
               if (keysRef.current[car.controls.right]) car.steer = steerLimit;
+            }
+          } else {
+            // Remote Human Multiplayer
+            if (car.remoteTarget) {
+                car.x += (car.remoteTarget.x - car.x) * 0.3; // LERP X
+                car.y += (car.remoteTarget.y - car.y) * 0.3; // LERP Y
+                let ad = car.remoteTarget.a - car.angle;
+                while(ad > Math.PI) ad -= Math.PI * 2;
+                while(ad < -Math.PI) ad += Math.PI * 2;
+                car.angle += ad * 0.3;
             }
           }
 
@@ -593,8 +660,11 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
               else car.brake = 1.0; 
           }
 
-          // Apply Physics
-          updateCarPhysics(car, dt, surface);
+          // Apply Physics ONLY for local instances (Bots master / Local human)
+          if (car.isLocal || car.isBot) {
+              updateCarPhysics(car, dt, surface);
+          }
+          
           audio.updateEngine(car.id, Math.sqrt(car.vx*car.vx + car.vy*car.vy) / 1200, car.throttle, car.isBot);
 
           // Generate Persistent Skid Marks purely if Tire Degradation Physics are in Tier III / Tier IV conditions!
@@ -615,11 +685,21 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
              car.currentWaypoint = 0; // reset
              
              // Track Lap Times
-             if (car.currentLapStartTime) {
+             if (car.laps > 0 && car.currentLapStartTime) {
                 const lapTime = now - car.currentLapStartTime;
                 car.lastLapTime = lapTime;
                 if (!car.bestLapTime || lapTime < car.bestLapTime) car.bestLapTime = lapTime;
                 
+                if (lapTime < globalBestLapRef.current) {
+                    const isInitial = globalBestLapRef.current === Infinity;
+                    globalBestLapRef.current = lapTime;
+                    
+                    const pDetails = players.find(p => p.id === car.id);
+                    const name = pDetails?.driverName || (car.isBot ? 'BOT AI' : `P${car.id}`);
+                    setFastLapPopup({ name, time: formatTime(lapTime), color: car.color, isInitial });
+                    setTimeout(() => setFastLapPopup(null), 4000);
+                }
+
                 const lastEl = document.getElementById(`hud-last-${car.id}`);
                 if (lastEl) lastEl.innerText = formatTime(lapTime);
                 const bestEl = document.getElementById(`hud-best-${car.id}`);
@@ -638,6 +718,18 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
              }
           }
         });
+
+        // ------------------ MULTIPLAYER SYNC (20Hz ~ 50ms) ------------------
+        const nowMs = Date.now();
+        if (nowMs - lastEmitRef.current > 50) {
+           carsRef.current.filter(c => c.isLocal).forEach(c => {
+               socket.emit('player_tick', {
+                   id: c.id, x: c.x, y: c.y, a: c.angle,
+                   vx: c.vx, vy: c.vy, s: c.steer, b: c.brake, t: c.throttle
+               });
+           });
+           lastEmitRef.current = nowMs;
+        }
 
         if (carsRef.current.some(c => c.finishTime !== null && c.finishTime !== undefined) && firstFinishTimeRef.current === null) {
           firstFinishTimeRef.current = now;
@@ -793,7 +885,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
         ctx.translate(car.x, car.y);
         ctx.rotate(car.angle);
         ctx.scale(1.5, 1.5); // F1 visual scale
-        drawF1Car(ctx, car.color, car.color2 || '#222', car.drsEnabled);
+        drawF1Car(ctx, car.color, car.color2 || '#222', car.helmetColor || '#FFDD00', car.drsEnabled);
         ctx.restore();
       });
 
@@ -809,7 +901,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
         ctx.translate(car.x, car.y);
         ctx.rotate(car.angle);
         ctx.scale(1.5, 1.5);
-        drawF1Car(ctx, car.color, car.color2 || '#222', car.drsEnabled);
+        drawF1Car(ctx, car.color, car.color2 || '#222', car.helmetColor || '#FFDD00', car.drsEnabled);
         ctx.restore();
       });
 
@@ -929,36 +1021,53 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
             </h1>
             <p className="text-[#E10600] font-bold tracking-widest uppercase mb-6">Afinação Aerodinâmica de Corrida</p>
             
-            {/* Track Telemetry HUD */}
-            <div className="w-full max-w-2xl bg-[#111116]/90 rounded-xl p-4 grid grid-cols-4 gap-x-2 text-center text-white border-2 border-gray-800 shadow-2xl mb-10">
-              {(() => {
-                 const telemetry = getTrackTelemetry(spline);
-                 return (
-                   <>
-                      <div className="flex flex-col justify-center">
-                         <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Extensão</span>
-                         <span className="block text-xl font-black leading-none">{telemetry.lengthKm} <span className="text-[10px] text-gray-400">KM</span></span>
-                      </div>
-                      <div className="border-l border-gray-800 flex flex-col justify-center">
-                         <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Curvas</span>
-                         <span className="block text-xl font-black leading-none">{telemetry.corners}</span>
-                      </div>
-                      <div className="border-l border-gray-800 flex flex-col justify-center">
-                         <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Top Speed Estimada</span>
-                         <span className="block text-xl font-black text-[#E10600] leading-none">{telemetry.topSpeedKmh} <span className="text-[10px] text-gray-400">KM/H</span></span>
-                      </div>
-                      <div className="border-l border-gray-800 flex flex-col justify-center">
-                         <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Min Apex (Ganchos)</span>
-                         <span className="block text-xl font-black text-yellow-500 leading-none">{telemetry.minCornerKmh} <span className="text-[10px] text-gray-400">KM/H</span></span>
-                      </div>
-                   </>
-                 )
-              })()}
-            </div>
+            <div className="flex flex-col xl:flex-row gap-8 w-full max-w-7xl mx-auto items-start mb-12">
+               
+               {/* LEFT SIDE: Track Info */}
+               <div className="w-full xl:w-5/12 flex flex-col gap-4">
+                  {/* Track Preview & Name */}
+                  <div className="w-full rounded-xl border-2 border-gray-800 shadow-2xl overflow-hidden relative bg-[#15151e]">
+                     <div className="absolute top-4 left-6 z-10 pointer-events-none">
+                       <h2 className="text-3xl md:text-4xl text-white font-black italic uppercase tracking-tighter drop-shadow-lg">{track?.name || "PISTA OFICIAL"}</h2>
+                       <p className="text-gray-400 text-[10px] font-bold tracking-widest uppercase mt-1">Traçado Físico</p>
+                     </div>
+                     <div className="h-[240px] md:h-[300px] w-full">
+                       <TrackPreview track={track} />
+                     </div>
+                  </div>
 
-            <div className="flex flex-col items-center justify-center gap-8 mb-12 w-full max-w-6xl mx-auto">
-               {players.filter(p => !p.isBot).map(p => (
-                  <div key={p.id} className="bg-[#15151e] border-t-4 border-[#E10600] rounded-xl p-6 shadow-2xl w-full">
+                  {/* Track Telemetry HUD */}
+                  <div className="w-full bg-[#111116]/90 rounded-xl p-4 grid grid-cols-4 gap-x-2 text-center text-white border-2 border-gray-800 shadow-2xl">
+                    {(() => {
+                       const telemetry = getTrackTelemetry(spline);
+                       return (
+                         <>
+                            <div className="flex flex-col justify-center">
+                               <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Extensão</span>
+                               <span className="block text-xl font-black leading-none">{telemetry.lengthKm} <span className="text-[10px] text-gray-400">KM</span></span>
+                            </div>
+                            <div className="border-l border-gray-800 flex flex-col justify-center">
+                               <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Curvas</span>
+                               <span className="block text-xl font-black leading-none">{telemetry.corners}</span>
+                            </div>
+                            <div className="border-l border-gray-800 flex flex-col justify-center">
+                               <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Top Speed</span>
+                               <span className="block text-xl font-black text-[#E10600] leading-none">{telemetry.topSpeedKmh} <span className="text-[10px] text-gray-400">KM/H</span></span>
+                            </div>
+                            <div className="border-l border-gray-800 flex flex-col justify-center">
+                               <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Min Apex</span>
+                               <span className="block text-xl font-black text-yellow-500 leading-none">{telemetry.minCornerKmh} <span className="text-[10px] text-gray-400">KM/H</span></span>
+                            </div>
+                         </>
+                       )
+                    })()}
+                  </div>
+               </div>
+
+               {/* RIGHT SIDE: Players Setups */}
+               <div className="w-full xl:w-7/12 flex flex-col gap-6">
+                  {players.filter(p => !p.isBot).map(p => (
+                     <div key={p.id} className="bg-[#15151e] border-t-4 border-[#E10600] rounded-xl p-6 shadow-2xl w-full">
                      <div className="flex items-center gap-3 mb-6 border-b border-gray-800 pb-4">
                         <div className="w-4 h-4 rounded-full" style={{ backgroundColor: p.color }}></div>
                         <div>
@@ -1034,9 +1143,10 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
                   </div>
                ))}
             </div>
+          </div>
 
-            <button 
-               onClick={() => {
+          <button 
+             onClick={() => {
                   setIsSetupPhase(false);
                   setStartSequence(1);
                   // Force a re-render frame reset to clear any blurred canvas artifacts
@@ -1050,8 +1160,21 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
          </div>
       )}
       
+      {/* Global Fastest Lap Popup HUD */}
+      {fastLapPopup && !raceFinished && startSequence >= 4 && (
+         <div className="absolute bottom-8 right-8 z-50 flex flex-col items-end drop-shadow-2xl animate-bounce">
+            <div className="bg-purple-800/90 backdrop-blur-md text-white px-8 py-3 border-t-4 shadow-[0_0_30px_rgba(147,51,234,0.6)] flex flex-col items-center justify-center gap-1" style={{borderTopColor: fastLapPopup.color}}>
+               <span className="text-xl font-bold tracking-widest uppercase text-purple-200">{fastLapPopup.isInitial ? 'TEMPO DE REFERÊNCIA' : 'NOVA VOLTA RÁPIDA!'}</span>
+               <span className="text-5xl font-black italic tracking-tighter text-[#39FF14]">{fastLapPopup.time}</span>
+            </div>
+            <div className="bg-black/90 text-white px-12 py-2 w-full text-center border-b-8" style={{borderBottomColor: fastLapPopup.color}}>
+               <span className="text-2xl font-black tracking-widest uppercase" style={{color: fastLapPopup.color}}>{fastLapPopup.name}</span>
+            </div>
+         </div>
+      )}
+      
       {!isSetupPhase && !raceFinished && startSequence >= 4 && (
-         <div className="absolute top-4 left-4 flex flex-col gap-2 z-10 pointer-events-none">
+         <div className="absolute bottom-8 left-0 flex flex-col gap-2 z-10 pointer-events-none">
             {players.filter(p => !p.isBot).map(p => {
                const car = carsRef.current.find(c => c.id === p.id);
                if (!car) return null;
@@ -1078,15 +1201,39 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
          </div>
       )}
 
-      {/* Camera Mode Indicator HUD */}
-      {!isSetupPhase && !raceFinished && startSequence >= 4 && (
-         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 bg-black/50 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 flex items-center gap-3">
-             <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">TECLA '{players.find(p => !p.isBot)?.controls?.camera?.replace('Key', '')?.replace('Arrow', '') || 'C'}' CÂMARA:</span>
-             <span className={`text-[10px] font-black uppercase tracking-widest ${cameraModeUI === 'CENTRAL' ? 'text-white' : (cameraModeUI === 'DYNAMIC' ? 'text-[#39FF14]' : 'text-yellow-400')}`}>
-                 {cameraModeUI === 'CENTRAL' ? 'CLÁSSICA CENTRAL' : (cameraModeUI === 'DYNAMIC' ? 'DINÂMICA (ANTECIPAÇÃO)' : 'MODO QUADRANTES OBTUSOS')}
-             </span>
-         </div>
-      )}
+      {/* HUD Control Hints List */}
+      {!isSetupPhase && !raceFinished && startSequence >= 4 && (() => {
+         const p = players.find(player => !player.isBot);
+         if (!p) return null;
+         
+         // Fix ts undefined fallback explicitly
+         const fmtKey = (k?: string, def: string = '') => (k || def).replace('Key', '').replace('Arrow', '');
+         const KeyCap = ({ k, color = 'text-black' }: { k: string, color?: string }) => (
+            <kbd className={`bg-white ${color} px-1.5 py-0.5 rounded shadow-[0_1px_0_#ccc] font-black mx-0.5`}>{k}</kbd>
+         );
+         
+         return (
+            <div className="absolute top-16 right-4 z-10 flex flex-col items-end gap-1.5 opacity-70 hover:opacity-100 transition-opacity">
+               <span className="text-[9.5px] text-white font-mono bg-black/60 px-2.5 py-1 rounded inline-flex items-center border border-gray-800">
+                  <span className="text-gray-400 mr-2">ACEL/TRAV:</span> 
+                  <KeyCap k={fmtKey(p.controls?.up, 'Q')} /> 
+                  <span className="mx-1 text-gray-500">/</span> 
+                  <KeyCap k={fmtKey(p.controls?.down, 'A')} />
+               </span>
+               <span className="text-[9.5px] text-white font-mono bg-black/60 px-2.5 py-1 rounded inline-flex items-center border border-gray-800">
+                  <span className="text-gray-400 mr-2">DIREÇÃO:</span> 
+                  <KeyCap k={fmtKey(p.controls?.left, 'O')} /> 
+                  <span className="mx-1 text-gray-500">/</span> 
+                  <KeyCap k={fmtKey(p.controls?.right, 'P')} />
+               </span>
+               <div className="text-[9.5px] text-white font-mono bg-black/60 px-2.5 py-1 rounded mt-1 flex items-center border border-gray-800">
+                  <span className="text-gray-400 mr-2">CÂMARA:</span>
+                  <KeyCap k={fmtKey(p.controls?.camera, 'C')} color="text-[#E10600]" />
+                  <span className="text-gray-300 ml-2">{cameraModeUI === 'CENTRAL' ? 'CLÁSSICA CENTRAL' : (cameraModeUI === 'DYNAMIC' ? 'DINÂMICA' : 'QUADRANTES')}</span>
+               </div>
+            </div>
+         );
+      })()}
       
       {!raceFinished && (
         <button onClick={onBackToMenu} className="fixed top-4 right-4 bg-red-600 text-white font-bold px-4 py-2 hover:bg-red-700 z-50 rounded-lg shadow-lg text-sm tracking-wider uppercase">
@@ -1094,38 +1241,73 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
         </button>
       )}
       
-      {raceFinished && (
-        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
-          <h1 className="text-5xl mb-8 text-white font-black italic">CLASSIFICAÇÃO</h1>
-          <div className="bg-[#15151e] border-l-4 border-[#E10600] p-8 mb-8 w-full max-w-2xl">
-            {carsRef.current.sort((a,b) => (a.finishTime || Infinity) - (b.finishTime || Infinity)).map((c, i) => {
-              const pDetails = players.find(p => p.id === c.id);
-              const name = pDetails?.driverName ? pDetails.driverName : (c.isBot ? 'BOT AI' : `P${c.id}`);
-              return (
-              <div key={c.id} className="flex justify-between mb-2 text-xl font-black uppercase" style={{color: c.color}}>
-                <span>{i+1}º - {name}</span>
-                <span className="font-mono">{c.finishTime && c.finishTime !== Infinity ? formatTime(c.finishTime) : 'DNF'}</span>
+      {raceFinished && (() => {
+        const sortedCars = [...carsRef.current].sort((a,b) => (a.finishTime || Infinity) - (b.finishTime || Infinity));
+        const F1_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+        
+        let fastestLapCarId = -1;
+        let fastestLapTime = Infinity;
+        sortedCars.forEach(c => {
+           if (c.finishTime && c.finishTime !== Infinity && c.bestLapTime && c.bestLapTime > 0 && c.bestLapTime < fastestLapTime) {
+               fastestLapTime = c.bestLapTime;
+               fastestLapCarId = c.id;
+           }
+        });
+
+        return (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+            <h1 className="text-5xl mb-8 text-white font-black italic">CLASSIFICAÇÃO</h1>
+            <div className="bg-[#15151e] border-l-4 border-[#E10600] p-8 mb-8 w-full max-w-3xl">
+              <div className="flex justify-between mb-4 text-[10px] text-gray-500 font-bold uppercase tracking-widest border-b border-gray-800 pb-2">
+                 <span>POSIÇÃO / PILOTO</span>
+                 <div className="flex space-x-12 w-1/3 justify-end text-right pr-4">
+                    <span>TEMPO</span>
+                    <span>PONTOS</span>
+                 </div>
               </div>
-            )})}
+              {sortedCars.map((c, i) => {
+                const pDetails = players.find(p => p.id === c.id);
+                const name = pDetails?.driverName || (c.isBot ? 'BOT AI' : `P${c.id}`);
+                const isFinished = c.finishTime && c.finishTime !== Infinity;
+                const basePoints = (i < 10 && isFinished) ? F1_POINTS[i] : 0;
+                const isFastestLap = (c.id === fastestLapCarId);
+                const extraPoint = (isFastestLap && isFinished) ? 1 : 0;
+                const totalPoints = basePoints + extraPoint;
+
+                return (
+                  <div key={c.id} className="flex justify-between mb-2 text-xl font-black uppercase items-center" style={{color: c.color}}>
+                    <span className="flex-1 flex items-center">
+                       {i+1}º - {name}
+                       {isFastestLap && isFinished && <span className="ml-3 text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full" title="Volta Mais Rápida (+1 Pt)">FL</span>}
+                    </span>
+                    <div className="flex space-x-12 w-1/3 justify-end text-right items-center pr-4">
+                       <span className="font-mono text-sm tracking-wider w-24 text-right">{isFinished ? formatTime(c.finishTime!) : 'DNF'}</span>
+                       <span className="font-mono text-lg w-12 text-center bg-white/10 rounded pt-1 pb-1">{isFinished ? totalPoints : 0}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <button 
+               onClick={() => {
+                  const results = sortedCars.map((c, idx) => {
+                     const pDetails = players.find(p => p.id === c.id);
+                     return {
+                        playerId: c.id,
+                        position: idx + 1,
+                        driverName: pDetails?.driverName || (c.isBot ? 'BOT AI' : `P${c.id}`)
+                     };
+                  });
+                  onBackToMenu(results);
+               }} 
+               className="px-8 py-4 bg-white text-black font-bold uppercase tracking-widest rounded transition hover:bg-gray-300"
+            >
+               CONTINUAR
+            </button>
           </div>
-          <button 
-             onClick={() => {
-                const results = carsRef.current.sort((a,b) => (a.finishTime || Infinity) - (b.finishTime || Infinity)).map((c, idx) => {
-                   const pDetails = players.find(p => p.id === c.id);
-                   return {
-                      playerId: c.id,
-                      position: idx + 1,
-                      driverName: pDetails?.driverName || (c.isBot ? 'BOT AI' : `P${c.id}`)
-                   };
-                });
-                onBackToMenu(results);
-             }} 
-             className="px-8 py-4 bg-white text-black font-bold uppercase tracking-widest rounded transition hover:bg-gray-300"
-          >
-             CONTINUAR
-          </button>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

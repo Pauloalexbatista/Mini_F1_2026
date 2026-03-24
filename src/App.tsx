@@ -8,18 +8,11 @@ import { TRACKS, TrackDef, parseStudioToNodes, parseStudioControlPoints, fuseAnd
 import { TrackBuilder } from './components/TrackBuilder';
 import { socket } from './socket';
 
-export const TEAM_LIVERIES = [
-  { p: '#DC0000', s: '#000000', name: 'Ferrari', d1: 'Leclerc', d2: 'Hamilton' },
-  { p: '#C0C0C0', s: '#00D2BE', name: 'Mercedes', d1: 'Russell', d2: 'Antonelli' },
-  { p: '#0600EF', s: '#FFC72C', name: 'Red Bull Racing', d1: 'Verstappen', d2: 'Lawson' },
-  { p: '#FF8700', s: '#000000', name: 'McLaren', d1: 'Norris', d2: 'Piastri' },
-  { p: '#229971', s: '#000000', name: 'Aston Martin', d1: 'Alonso', d2: 'Stroll' },
-  { p: '#0090FF', s: '#FF66C4', name: 'Alpine', d1: 'Gasly', d2: 'Doohan' },
-  { p: '#E8002D', s: '#000000', name: 'Audi', d1: 'Hülkenberg', d2: 'Bortoleto' },
-  { p: '#222222', s: '#FFFFFF', name: 'Cadillac', d1: 'Herta', d2: 'O\'Ward' },
-  { p: '#0000FF', s: '#FFFFFF', name: 'Racing Bulls', d1: 'Tsunoda', d2: 'Hadjar' },
-  { p: '#FFFFFF', s: '#FF0000', name: 'Haas F1 Team', d1: 'Ocon', d2: 'Bearman' },
-  { p: '#000088', s: '#00A0FF', name: 'Williams', d1: 'Sainz', d2: 'Albon' }
+const BOT_NAMES = [
+  'Racer X', 'Speedy Gonzales', 'Turbo Tom', 'Flash Gordon', 'Captain Crash',
+  'Nitro Nick', 'Zoomer', 'Blaze', 'Vortex', 'Maverick', 'Stinger', 'Phantom',
+  'Road Runner', 'Hot Rod Harry', 'Gearhead Greg', 'Piston Pete', 'Drift King',
+  'Apex Ace', 'Gridlock Gary', 'Burnout Bob'
 ];
 
 const DEFAULT_CONTROLS = [
@@ -53,6 +46,18 @@ export default function App() {
         if (res.ok) {
           const userData = await res.json();
           setUser(userData);
+          setPlayers(prev => {
+             const np = [...prev];
+             np[0] = {
+                 ...np[0],
+                 color: userData.primary_color || '#E10600',
+                 color2: userData.secondary_color || '#000000',
+                 helmetColor: userData.helmet_color || '#FFDD00',
+                 driverName: userData.pilot_name || userData.username || 'PILOTO 1',
+                 teamName: 'Garagem Pessoal'
+             };
+             return np;
+          });
           
           try {
              const trackRes = await fetch('/api/tracks');
@@ -100,30 +105,30 @@ export default function App() {
   const [championshipStandings, setChampionshipStandings] = useState<Record<number, number>>({});
   const [totalLaps, setTotalLaps] = useState(3);
   
-  const [players, setPlayers] = useState<PlayerConfig[]>(
-    Array.from({ length: 6 }).map((_, i) => ({
-      id: i + 1,
-      color: TEAM_LIVERIES[i].p,
-      color2: TEAM_LIVERIES[i].s,
-      teamName: TEAM_LIVERIES[i].name,
-      driverName: TEAM_LIVERIES[i].d1,
-      controls: DEFAULT_CONTROLS[i],
+  const [players, setPlayers] = useState<PlayerConfig[]>([
+    {
+      id: 1,
+      color: '#E10600',
+      color2: '#000000',
+      helmetColor: '#FFDD00',
+      teamName: 'Garagem Pessoal',
+      driverName: 'PILOTO 1',
+      controls: DEFAULT_CONTROLS[0],
       isBot: false,
-      difficulty: 0.85 + (i * 0.03) // 0.85 to 1.0
-    }))
-  );
+      difficulty: 1.0
+    }
+  ]);
 
   useEffect(() => {
      if (user && appState === 'menu') {
-        const p1Livery = TEAM_LIVERIES[user.selected_car_id - 1] || TEAM_LIVERIES[0];
-        
         const joinData = {
             userId: user.id || 1,
-            driverName: user.pilot_name || user.username || 'PILOTO 1',
-            teamName: p1Livery.name,
-            color: p1Livery.p,
-            color2: p1Livery.s,
-            controls: players[0]?.controls || { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' }
+            driverName: players[0]?.driverName || user.pilot_name || user.username || 'PILOTO 1',
+            teamName: 'Garagem Pessoal',
+            color: players[0]?.color || user.primary_color || '#E10600',
+            color2: players[0]?.color2 || user.secondary_color || '#000000',
+            helmetColor: players[0]?.helmetColor || user.helmet_color || '#FFDD00',
+            controls: players[0]?.controls || { up: 'KeyQ', down: 'KeyA', left: 'KeyO', right: 'KeyP', camera: 'KeyC' }
         };
 
         socket.connect();
@@ -139,12 +144,18 @@ export default function App() {
             }
         };
 
+        const onLobbyError = (err: { message: string }) => {
+            alert(err.message);
+        };
+
         socket.on('lobby_state', onLobbyState);
         socket.on('start_race', onStartRace);
+        socket.on('lobby_error', onLobbyError);
 
         return () => {
             socket.off('lobby_state', onLobbyState);
             socket.off('start_race', onStartRace);
+            socket.off('lobby_error', onLobbyError);
             socket.disconnect();
         };
      }
@@ -158,7 +169,11 @@ export default function App() {
 
   const handleStartGame = () => {
     if (dbTracks.length > 0) {
-        socket.emit('start_race');
+        if (socket.connected) {
+            socket.emit('start_race');
+        } else {
+            setAppState('playing');
+        }
     } else {
         alert("Paddock Vazio! Entre no Track Builder Studio e construa uma pista primeiro.");
     }
@@ -248,49 +263,64 @@ export default function App() {
   let activePlayers: PlayerConfig[] = [];
   
   if (onlineLobby.length > 0) {
-      activePlayers = onlineLobby.map((p, i) => ({
-          id: p.socketId, // Maintain socket consistency for multiplayer targeting
-          isBot: false,
-          controls: p.controls,
-          driverName: p.driverName,
-          teamName: p.teamName,
-          color: p.color,
-          color2: p.color2,
-          difficulty: 1.0,
-          socketId: p.socketId,
-          isReady: p.isReady
-      }));
+      activePlayers = onlineLobby.map((p, i) => {
+          const isLocal = p.userId === (user?.id || 1);
+          return {
+              id: p.socketId, // Maintain socket consistency for multiplayer targeting
+              isBot: false,
+              isLocal: isLocal,
+              controls: isLocal ? (players[0]?.controls || p.controls) : p.controls,
+              driverName: p.driverName,
+              teamName: p.teamName,
+              color: isLocal ? (players[0]?.color || p.color) : p.color,
+              color2: isLocal ? (players[0]?.color2 || p.color2) : p.color2,
+              helmetColor: isLocal ? (players[0]?.helmetColor || p.helmetColor) : p.helmetColor,
+              difficulty: 1.0,
+              socketId: p.socketId,
+              isReady: p.isReady
+          };
+      });
   } else if (user) {
       // Fallback local se estiver a ligar
-      const p1Livery = TEAM_LIVERIES[user.selected_car_id - 1] || TEAM_LIVERIES[0];
       activePlayers.push({
            id: 1,
            isBot: false,
-           controls: players[0]?.controls || { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' },
-           driverName: user.pilot_name || players[0]?.driverName || 'PILOTO 1',
-           teamName: p1Livery.name,
-           color: p1Livery.p,
-           color2: p1Livery.s,
-           difficulty: 1.0
+           isLocal: true,
+           controls: players[0]?.controls || { up: 'KeyQ', down: 'KeyA', left: 'KeyO', right: 'KeyP', camera: 'KeyC' },
+           driverName: players[0]?.driverName || user.pilot_name || 'PILOTO 1',
+           teamName: 'Garagem Pessoal',
+           color: players[0]?.color || user.primary_color || '#E10600',
+           color2: players[0]?.color2 || user.secondary_color || '#000000',
+           helmetColor: players[0]?.helmetColor || user.helmet_color || '#FFDD00',
+           difficulty: 1.0,
+           socketId: undefined,
+           isReady: true
       });
   }
 
   // Preenchimento de IA Bots para manter a Grelha Cheia (10 Carros)
   if (activePlayers.length > 0 && activePlayers.length < 10) {
       const neededBots = 10 - activePlayers.length;
-      let botIndexOffset = activePlayers.length;
+      
+      const BOT_NAMES = ['A. Silva', 'M. Verstappen', 'L. Hamilton', 'F. Alonso', 'C. Leclerc', 'L. Norris', 'C. Sainz', 'G. Russell', 'O. Piastri', 'S. Perez', 'A. Albon', 'Y. Tsunoda', 'N. Hulkenberg', 'V. Bottas', 'E. Ocon', 'P. Gasly', 'K. Magnussen', 'Z. Guanyu', 'L. Stroll', 'L. Lawson', 'A. Senna'];
+      const takenNames = activePlayers.map(p => p.driverName);
+      const availableNames = BOT_NAMES.filter(n => !takenNames.includes(n)).sort(() => Math.random() - 0.5);
+
       for (let i = 0; i < neededBots; i++) {
-          const liveryIndex = (botIndexOffset + i) % TEAM_LIVERIES.length;
-          const botLivery = TEAM_LIVERIES[liveryIndex];
+          const hue1 = Math.floor(Math.random() * 360);
+          const hue2 = (hue1 + 180 + Math.floor(Math.random() * 60 - 30)) % 360;
+          const hueHelmet = Math.floor(Math.random() * 360);
+
           activePlayers.push({
              id: 10 + i, // IDs acima de 10 para evitar colisões
              isBot: true,
              controls: { up: '', down: '', left: '', right: '' },
-             driverName: 'AI ' + botLivery.d2,
-             teamName: botLivery.name,
-             color: botLivery.p,
-             color2: botLivery.s,
-             difficulty: 0.90 + (Math.random() * 0.1), // Difficulty 0.90 - 1.00
+             driverName: availableNames[i] || `BOT ${i+1}`,
+             teamName: 'AI Racing Team',
+             color: `hsl(${hue1}, 85%, 45%)`,
+             color2: `hsl(${hue2}, 80%, 30%)`,
+             helmetColor: `hsl(${hueHelmet}, 90%, 55%)`,
+             difficulty: 0.88 + (Math.random() * 0.12), // Difficulty 0.88 - 1.00
              socketId: `bot_${i}`,
              isReady: true 
           });
@@ -312,6 +342,18 @@ export default function App() {
       <Auth onLogin={(token, loggedUser) => {
         localStorage.setItem('token', token);
         setUser(loggedUser);
+        setPlayers(prev => {
+             const np = [...prev];
+             np[0] = {
+                 ...np[0],
+                 color: loggedUser.primary_color || '#E10600',
+                 color2: loggedUser.secondary_color || '#000000',
+                 helmetColor: loggedUser.helmet_color || '#FFDD00',
+                 driverName: loggedUser.pilot_name || loggedUser.username || 'PILOTO 1',
+                 teamName: 'Garagem Pessoal'
+             };
+             return np;
+        });
       }} />
     );
   }
@@ -334,13 +376,14 @@ export default function App() {
           onUpdatePlayer={handleUpdatePlayer} 
           onDeleteTrack={handleDeleteTrack} // New Prop
           user={user} // Pass user role for conditional UI
+          setUser={setUser} // Pass setUser to update global state from Garage
         />
       )}
       {appState === 'playing' && (
         <Game 
           key={`race-${currentChampionshipRaceIndex}`}
           players={activePlayers} 
-          track={dbTracks.find(t => t.id === selectedTracks[currentChampionshipRaceIndex])!}
+          track={dbTracks.find(t => t.id === selectedTracks[currentChampionshipRaceIndex]) || dbTracks[0]}
           totalLaps={totalLaps}
           onBackToMenu={handleBackToMenu} 
         />
