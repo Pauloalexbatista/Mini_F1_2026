@@ -35,7 +35,22 @@ export async function initDB() {
       pilot_name TEXT NOT NULL,
       selected_car_id INTEGER DEFAULT 1
     );
+  `);
 
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS events (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      host_id INTEGER NOT NULL,
+      host_name TEXT NOT NULL,
+      tracks_json TEXT NOT NULL,
+      laps INTEGER DEFAULT 1,
+      status TEXT DEFAULT 'open',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  await db.exec(`
     CREATE TABLE IF NOT EXISTS tracks (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,

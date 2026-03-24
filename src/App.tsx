@@ -30,7 +30,9 @@ export default function App() {
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [dbTracks, setDbTracks] = useState<TrackDef[]>([]);
-  const [onlineLobby, setOnlineLobby] = useState<any[]>([]);
+  const [globalRoster, setGlobalRoster] = useState<any[]>([]);
+  const [lobbyState, setLobbyState] = useState<any[]>([]);
+  const [activeEventId, setActiveEventId] = useState<string | null>(null);
   
   const [appState, setAppState] = useState<'menu' | 'playing' | 'builder'>('menu');
 
@@ -124,22 +126,24 @@ export default function App() {
   ]);
 
   useEffect(() => {
-     if (user && appState === 'menu') {
-        const joinData = {
+     if (user) {
+        socket.connect();
+        socket.emit('join_global', {
             userId: user.id || 1,
             driverName: players[0]?.driverName || user.pilot_name || user.username || 'PILOTO 1',
             teamName: 'Garagem Pessoal',
             color: players[0]?.color || user.primary_color || '#E10600',
             color2: players[0]?.color2 || user.secondary_color || '#000000',
             helmetColor: players[0]?.helmetColor || user.helmet_color || '#FFDD00',
-            controls: players[0]?.controls || { up: 'KeyQ', down: 'KeyA', left: 'KeyO', right: 'KeyP', camera: 'KeyC' }
-        };
+        });
 
-        socket.connect();
-        socket.emit('join_lobby', joinData);
+        const onGlobalRoster = (roster: any[]) => setGlobalRoster(roster);
 
-        const onLobbyState = (state: any[]) => {
-            setOnlineLobby(state);
+        const onLobbyState = (state: any[]) => setLobbyState(state);
+
+        const onTriggerRefresh = () => {
+           // signal Menu to re-fetch events list
+           setActiveEventId(prev => prev); // force re-render
         };
 
         const onStartRace = (data: any) => {
@@ -152,22 +156,20 @@ export default function App() {
             }
         };
 
-        const onLobbyError = (err: { message: string }) => {
-            alert(err.message);
-        };
-
+        socket.on('global_roster', onGlobalRoster);
         socket.on('lobby_state', onLobbyState);
-        socket.on('start_race', onStartRace);
-        socket.on('lobby_error', onLobbyError);
+        socket.on('trigger_refresh_events', onTriggerRefresh);
+        socket.on('race_started', onStartRace);
 
         return () => {
+            socket.off('global_roster', onGlobalRoster);
             socket.off('lobby_state', onLobbyState);
-            socket.off('start_race', onStartRace);
-            socket.off('lobby_error', onLobbyError);
+            socket.off('trigger_refresh_events', onTriggerRefresh);
+            socket.off('race_started', onStartRace);
             socket.disconnect();
         };
      }
-  }, [user, appState, players, dbTracks]);
+  }, [user, dbTracks]);
 
   const handleUpdatePlayer = (index: number, config: PlayerConfig) => {
     const newPlayers = [...players];
@@ -177,14 +179,27 @@ export default function App() {
 
   const handleStartGame = () => {
     if (dbTracks.length > 0) {
-        if (socket.connected) {
-            socket.emit('start_race');
+        if (socket.connected && activeEventId) {
+            socket.emit('start_race', { tracks: selectedTracks, laps: totalLaps });
         } else {
             setAppState('playing');
         }
     } else {
         alert("Paddock Vazio! Entre no Track Builder Studio e construa uma pista primeiro.");
     }
+  };
+
+  const handleJoinEvent = (eventId: string, tracks: string[], laps: number) => {
+    setActiveEventId(eventId);
+    setSelectedTracks(tracks);
+    setTotalLaps(laps);
+    socket.emit('join_event', eventId);
+  };
+
+  const handleLeaveEvent = () => {
+    socket.emit('leave_event');
+    setActiveEventId(null);
+    setLobbyState([]);
   };
 
   const handleBackToMenu = (results?: any[]) => {
@@ -270,11 +285,11 @@ export default function App() {
   // Reconstrução da grelha de Partida usando estritamente o Lobby Online (Sockets)
   let activePlayers: PlayerConfig[] = [];
   
-  if (onlineLobby.length > 0) {
-      activePlayers = onlineLobby.map((p, i) => {
+  if (lobbyState.length > 0) {
+      activePlayers = lobbyState.map((p, i) => {
           const isLocal = p.socketId === socket.id;
           return {
-              id: p.socketId, // Maintain socket consistency for multiplayer targeting
+              id: p.socketId,
               isBot: false,
               isLocal: isLocal,
               controls: isLocal ? (players[0]?.controls || p.controls) : p.controls,
@@ -378,13 +393,18 @@ export default function App() {
           setSelectedTracks={setSelectedTracks}
           totalLaps={totalLaps}
           setTotalLaps={setTotalLaps}
-          onStart={handleStartGame} 
+          onStart={handleStartGame}
           onOpenBuilder={() => setAppState('builder')}
           onOpenProfile={() => setAppState('profile')}
-          onUpdatePlayer={handleUpdatePlayer} 
-          onDeleteTrack={handleDeleteTrack} // New Prop
-          user={user} // Pass user role for conditional UI
-          setUser={setUser} // Pass setUser to update global state from Garage
+          onUpdatePlayer={handleUpdatePlayer}
+          onDeleteTrack={handleDeleteTrack}
+          user={user}
+          setUser={setUser}
+          globalRoster={globalRoster}
+          lobbyState={lobbyState}
+          activeEventId={activeEventId}
+          onJoinEvent={handleJoinEvent}
+          onLeaveEvent={handleLeaveEvent}
         />
       )}
       {appState === 'playing' && (
