@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { PlayerConfig, getSetupFromSpeed } from '../types';
 import { TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { audio } from '../audio';
@@ -1087,7 +1087,21 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
 
                {/* RIGHT SIDE: Players Setups */}
                <div className="w-full xl:w-7/12 flex flex-col gap-6">
-                  {players.filter(p => !p.isBot).map(p => (
+                  {/* Remote players: read-only waiting card */}
+                   {players.filter(p => !p.isBot && !p.isLocal).map(p => (
+                      <div key={p.id} className="bg-[#15151e] border-t-4 border-gray-700 rounded-xl p-4 shadow-xl w-full opacity-70">
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full" style={{ backgroundColor: p.color }}></div>
+                          <div className="flex-1">
+                            <div className="text-base font-black text-gray-400 uppercase tracking-tighter leading-none">{p.driverName}</div>
+                            <div className="text-[9px] text-gray-600 font-bold uppercase tracking-widest">A configurar setup...</div>
+                          </div>
+                          <div className="text-[10px] font-black uppercase tracking-widest text-yellow-500 border border-yellow-800 bg-yellow-900/20 px-2 py-1 rounded">⏳ AGUARDAR</div>
+                        </div>
+                      </div>
+                   ))}
+                   {/* Local player: full editable setup card */}
+                   {players.filter(p => !p.isBot && p.isLocal).map(p => (
                      <div key={p.id} className="bg-[#15151e] border-t-4 border-[#E10600] rounded-xl p-6 shadow-2xl w-full">
                      <div className="flex items-center gap-3 mb-6 border-b border-gray-800 pb-4">
                         <div className="w-4 h-4 rounded-full" style={{ backgroundColor: p.color }}></div>
