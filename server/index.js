@@ -185,6 +185,46 @@ app.delete('/api/tracks/:id', authenticateToken, requireAdmin, async (req, res) 
 });
 
 // ---------------------------------------------------------
+// EVENTS (CHAMPIONSHIPS/RACES)
+// ---------------------------------------------------------
+
+app.get('/api/events', async (req, res) => {
+  try {
+    const events = await db.all("SELECT * FROM events WHERE status = 'open' ORDER BY created_at DESC");
+    res.json(events);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/events', authenticateToken, async (req, res) => {
+  try {
+    const { id, name, tracks_json, laps } = req.body;
+    await db.run(
+      'INSERT INTO events (id, name, host_id, host_name, tracks_json, laps, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, name, req.user.id, req.user.pilot_name, tracks_json, laps, 'open']
+    );
+    res.status(201).json({ message: 'Event created successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/events/:id', authenticateToken, async (req, res) => {
+  try {
+    const event = await db.get('SELECT host_id FROM events WHERE id = ?', [req.params.id]);
+    if (!event) return res.status(404).json({ error: 'Event not found' });
+    if (event.host_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized to delete this event' });
+    }
+    await db.run('DELETE FROM events WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Event deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ---------------------------------------------------------
 // LEADERBOARDS
 // ---------------------------------------------------------
 
@@ -237,72 +277,88 @@ app.get('*', (req, res) => {
 // WEBSOCKETS LOBBY MULTIPLAYER (FASE 4)
 // ---------------------------------------------------------
 
-let onlinePlayers = [];
+let onlinePlayers = []; // Track everyone
 
 io.on('connection', (socket) => {
   console.log(`[SOCKET] Handshake established: ${socket.id}`);
 
-  // Evento acionado quando o utilizador faz login c/ sucesso e está na Garagem/Menu
-  socket.on('join_lobby', (data) => {
-      const pin = (data.pin || 'GLOBAL').toUpperCase().trim();
-      
-      // Remover socket ID antigo se existir em qualquer sala e forçar o LEAVE da sala antiga do Socket.io
-      const oldPlayer = onlinePlayers.find(p => p.socketId === socket.id);
-      if (oldPlayer && oldPlayer.pin !== pin) {
-          socket.leave(oldPlayer.pin);
-      }
-      
-      socket.join(pin);
-
+  // Entra na plataforma global (Paddock Livre)
+  socket.on('join_global', (data) => {
       onlinePlayers = onlinePlayers.filter(p => p.socketId !== socket.id);
-      
-      const roomPlayers = onlinePlayers.filter(p => p.pin === pin);
-      
-      if (roomPlayers.length >= 10 && !roomPlayers.some(p => p.userId === data.userId)) {
-          socket.emit('lobby_error', { message: 'A grelha de partida nesta sala já está cheia (10/10 Pilotos).' });
-          return;
-      }
-      
-      const newPlayer = {
+      onlinePlayers.push({
          socketId: socket.id,
-         pin: pin,
          userId: data.userId,
          driverName: data.driverName,
          teamName: data.teamName,
          color: data.color,
          color2: data.color2,
          helmetColor: data.helmetColor,
-         isBot: false,
-         controls: data.controls,
-         isReady: false // Usado para avançar p/ a corrida
-      };
-      
-      onlinePlayers.push(newPlayer);
-      console.log(`[LOBBY] ${newPlayer.driverName} entrou na SALA: ${pin}`);
-      io.to(pin).emit('lobby_state', onlinePlayers.filter(p => p.pin === pin));
+         eventId: null,
+         isReady: false,
+         status: 'available' // available, racing
+      });
+      // Avisar todos da nova entrada
+      io.emit('global_roster', onlinePlayers);
   });
   
-  socket.on('set_ready', (isReady) => {
-      const p = onlinePlayers.find(p => p.socketId === socket.id);
+  // Entra num evento específico
+  socket.on('join_event', (eventId) => {
+      const p = onlinePlayers.find(x => x.socketId === socket.id);
       if (p) {
-         p.isReady = isReady;
-         io.to(p.pin).emit('lobby_state', onlinePlayers.filter(x => x.pin === p.pin));
+          if (p.eventId) socket.leave(p.eventId); // leave old
+          
+          p.eventId = eventId;
+          p.isReady = false;
+          p.status = 'in_lobby';
+          socket.join(eventId);
+          
+          io.emit('global_roster', onlinePlayers);
+          io.to(eventId).emit('lobby_state', onlinePlayers.filter(x => x.eventId === eventId));
       }
   });
 
-  // TELEMETRIA 20Hz (Fase 4 Multiplayer Engine)
+  // Host emite para notificar que apagou a sala ou a sala deve ser atualizada
+  socket.on('refresh_events', () => {
+      io.emit('trigger_refresh_events');
+  });
+
+  socket.on('set_ready', (isReady) => {
+      const p = onlinePlayers.find(p => p.socketId === socket.id);
+      if (p && p.eventId) {
+         p.isReady = isReady;
+         io.to(p.eventId).emit('lobby_state', onlinePlayers.filter(x => x.eventId === p.eventId));
+      }
+  });
+
   socket.on('player_tick', (carData) => {
       const p = onlinePlayers.find(p => p.socketId === socket.id);
-      if (p) {
-         socket.to(p.pin).emit('remote_tick', carData);
+      if (p && p.eventId) {
+         socket.to(p.eventId).emit('remote_tick', carData);
       }
   });
 
   socket.on('start_race', (data) => {
       const p = onlinePlayers.find(p => p.socketId === socket.id);
-      if (p) {
-          console.log(`[RACE] Sala ${p.pin} vai arrancar! Pistas:`, data.tracks);
-          io.to(p.pin).emit('race_started', data);
+      if (p && p.eventId) {
+          // Atualiza status de todos na sala para 'racing'
+          onlinePlayers.filter(x => x.eventId === p.eventId).forEach(x => x.status = 'racing');
+          io.emit('global_roster', onlinePlayers);
+          io.to(p.eventId).emit('race_started', data);
+      }
+  });
+  
+  // Sair de um evento e voltar à box
+  socket.on('leave_event', () => {
+      const p = onlinePlayers.find(x => x.socketId === socket.id);
+      if (p && p.eventId) {
+         const oldEvent = p.eventId;
+         socket.leave(oldEvent);
+         p.eventId = null;
+         p.isReady = false;
+         p.status = 'available';
+         
+         io.emit('global_roster', onlinePlayers);
+         io.to(oldEvent).emit('lobby_state', onlinePlayers.filter(x => x.eventId === oldEvent));
       }
   });
 
@@ -310,8 +366,10 @@ io.on('connection', (socket) => {
       const p = onlinePlayers.find(x => x.socketId === socket.id);
       onlinePlayers = onlinePlayers.filter(x => x.socketId !== socket.id);
       if (p) {
-         console.log(`[SOCKET] Piloto saiu da sala ${p.pin}: ${socket.id}`);
-         io.to(p.pin).emit('lobby_state', onlinePlayers.filter(x => x.pin === p.pin));
+         io.emit('global_roster', onlinePlayers);
+         if (p.eventId) {
+             io.to(p.eventId).emit('lobby_state', onlinePlayers.filter(x => x.eventId === p.eventId));
+         }
       }
   });
 });
