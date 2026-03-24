@@ -152,6 +152,7 @@ app.get('/api/me/records', authenticateToken, async (req, res) => {
 
 app.get('/api/tracks', async (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     const tracks = await db.all('SELECT id, name, svg_data, pit_svg_data, created_at FROM tracks ORDER BY created_at DESC');
     res.json(tracks);
   } catch (error) {
