@@ -337,13 +337,17 @@ io.on('connection', (socket) => {
       }
   });
 
-  socket.on('start_race', (data) => {
+  socket.on('start_race', async (data) => {
       const p = onlinePlayers.find(p => p.socketId === socket.id);
       if (p && p.eventId) {
-          // Atualiza status de todos na sala para 'racing'
+          // Mark event as 'racing' in DB so it disappears from the open events list
+          try { await db.run("UPDATE events SET status = 'racing' WHERE id = ?", [p.eventId]); } catch(e) {}
+          // Update all players in the room to 'racing' status
           onlinePlayers.filter(x => x.eventId === p.eventId).forEach(x => x.status = 'racing');
           io.emit('global_roster', onlinePlayers);
           io.to(p.eventId).emit('race_started', data);
+          // Notify all clients to refresh their events list (event is now gone)
+          io.emit('trigger_refresh_events');
       }
   });
   

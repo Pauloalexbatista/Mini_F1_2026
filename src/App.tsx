@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Menu from './components/Menu';
 import Game from './components/Game';
 import { Auth } from './components/Auth';
@@ -35,6 +35,10 @@ export default function App() {
   const [activeEventId, setActiveEventId] = useState<string | null>(null);
   
   const [appState, setAppState] = useState<'menu' | 'playing' | 'builder'>('menu');
+
+  // Use a ref so the socket handler always reads the latest dbTracks without re-subscribing
+  const dbTracksRef = useRef<TrackDef[]>([]);
+  useEffect(() => { dbTracksRef.current = dbTracks; }, [dbTracks]);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -151,7 +155,8 @@ export default function App() {
                 setSelectedTracks(data.tracks);
                 setTotalLaps(data.laps || 1);
             }
-            if (dbTracks.length > 0) {
+            // Use ref so we never get a stale empty array from the closure
+            if (dbTracksRef.current.length > 0) {
                setAppState('playing');
             }
         };
@@ -169,7 +174,7 @@ export default function App() {
             socket.disconnect();
         };
      }
-  }, [user, dbTracks]);
+  }, [user]); // Only re-subscribe when user changes, NOT on every dbTracks load
 
   const handleUpdatePlayer = (index: number, config: PlayerConfig) => {
     const newPlayers = [...players];

@@ -261,19 +261,26 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
              </div>
 
              <button
-                onClick={onStart}
-                disabled={ALL_TRACKS.length === 0 || selectedTracks.length === 0 || !players.every(p => p.isReady)}
-                className="w-full sm:flex-1 bg-[#E10600] hover:bg-red-700 text-white disabled:bg-gray-800 disabled:text-gray-500 py-3 sm:py-5 px-6 rounded text-sm sm:text-base font-black italic tracking-widest uppercase transition-colors flex items-center justify-center gap-3 disabled:cursor-not-allowed group relative overflow-hidden"
-             >
-                {players.every(p => p.isReady) ? (
-                   selectedTracks.length > 0 ? (
-                      <>IR PARA A <span className="hidden sm:inline ml-1">CORRIDA</span> <svg className="w-4 h-4 ml-2 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></>
+                 onClick={onStart}
+                 disabled={
+                   ALL_TRACKS.length === 0 ||
+                   selectedTracks.length === 0 ||
+                   // In a multiplayer lobby: wait for all humans to be ready
+                   (!!activeEventId && lobbyState.length > 0 && !lobbyState.every((p: any) => p.isReady))
+                 }
+                 className="w-full sm:flex-1 bg-[#E10600] hover:bg-red-700 text-white disabled:bg-gray-800 disabled:text-gray-500 py-3 sm:py-5 px-6 rounded text-sm sm:text-base font-black italic tracking-widest uppercase transition-colors flex items-center justify-center gap-3 disabled:cursor-not-allowed group relative overflow-hidden"
+              >
+                 {selectedTracks.length === 0 ? (
+                   'SELECIONE UMA PISTA...'
+                 ) : activeEventId ? (
+                   lobbyState.length > 0 && lobbyState.every((p: any) => p.isReady) ? (
+                     <>LANÇAR CORRIDA <svg className="w-4 h-4 ml-2 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></>
                    ) : (
-                      'SELECIONE UMA PISTA...'
+                     'A AGUARDAR PILOTOS...'
                    )
-                ) : (
-                   'A AGUARDAR PILOTOS...'
-                )}
+                 ) : (
+                   <>IR PARA A <span className="hidden sm:inline ml-1">CORRIDA</span> <svg className="w-4 h-4 ml-2 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></>
+                 )}
              </button>
           </div>
         </div>
@@ -544,62 +551,45 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
              </div>
 
              <div className="mt-10 mb-10 text-center w-full max-w-4xl flex flex-col items-center">
-                
-                <div className="mb-4 bg-[#1a1a24] p-4 rounded-xl border border-gray-800 shadow-inner flex flex-col items-center min-w-[300px]">
-                   <label className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mb-2">PIN DA SALA PRIVADA (EX: F1KART)</label>
-                   <input 
-                     type="text" 
-                     placeholder="DEIXAR EM BRANCO = LOBBY PÚBLICO"
-                     value={pinCode}
-                     onChange={(e) => setPinCode(e.target.value)}
-                     className="w-full bg-black text-center text-white font-black text-xl tracking-widest uppercase p-3 rounded outline-none border border-transparent focus:border-[#E10600] transition-colors placeholder:text-gray-700 placeholder:text-sm"
-                     maxLength={10}
-                   />
-                </div>
-
-                <button 
-                  onClick={async () => {
-                     // Permanently save user color to DB through API if logged in
-                     if (user) {
-                        try {
-                          await fetch('/api/me', {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                            body: JSON.stringify({ 
-                               pilot_name: user.pilot_name || user.username, 
-                               primary_color: players[0]?.color, 
-                               secondary_color: players[0]?.color2, 
-                               helmet_color: players[0]?.helmetColor 
-                            })
-                          });
-                          if (setUser) {
-                              setUser({
-                                 ...user,
-                                 primary_color: players[0]?.color,
-                                 secondary_color: players[0]?.color2,
-                                 helmet_color: players[0]?.helmetColor
-                              });
-                          }
-                        } catch(e) { console.error("Failed saving Garage colors", e); }
-                     }
-                     
-                     // Send socket update across multiplayer lobby instantly
-                     socket.emit('join_lobby', {
-                         pin: pinCode.trim().toUpperCase() || 'GLOBAL',
-                         userId: user?.id || 1,
-                         driverName: user?.pilot_name || user?.username || 'PILOTO 1',
-                         teamName: 'Garagem Pessoal',
-                         color: players[0]?.color,
-                         color2: players[0]?.color2,
-                         helmetColor: players[0]?.helmetColor,
-                         controls: players[0]?.controls
-                     });
-                  }}
-                  className="w-full max-w-[300px] bg-[#E10600] text-white font-black uppercase tracking-widest px-12 py-5 rounded-xl hover:bg-white hover:text-[#E10600] transition-colors shadow-[0_0_20px_rgba(225,6,0,0.4)]"
-                >
-                  CONFIRMAR!
-                </button>
-             </div>
+                 <button 
+                   onClick={async () => {
+                      if (user) {
+                         try {
+                           await fetch('/api/me', {
+                             method: 'PUT',
+                             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                             body: JSON.stringify({ 
+                                pilot_name: user.pilot_name || user.username, 
+                                primary_color: players[0]?.color, 
+                                secondary_color: players[0]?.color2, 
+                                helmet_color: players[0]?.helmetColor 
+                             })
+                           });
+                           if (setUser) {
+                               setUser({
+                                  ...user,
+                                  primary_color: players[0]?.color,
+                                  secondary_color: players[0]?.color2,
+                                  helmet_color: players[0]?.helmetColor
+                               });
+                           }
+                           // Also update the global roster with new colors
+                           socket.emit('join_global', {
+                               userId: user.id,
+                               driverName: user.pilot_name || user.username,
+                               teamName: 'Garagem Pessoal',
+                               color: players[0]?.color,
+                               color2: players[0]?.color2,
+                               helmetColor: players[0]?.helmetColor,
+                           });
+                         } catch(e) { console.error("Failed saving Garage colors", e); }
+                      }
+                   }}
+                   className="w-full max-w-[300px] bg-[#E10600] text-white font-black uppercase tracking-widest px-12 py-5 rounded-xl hover:bg-white hover:text-[#E10600] transition-colors shadow-[0_0_20px_rgba(225,6,0,0.4)]"
+                 >
+                   GUARDAR CONFIGURAÇÃO
+                 </button>
+              </div>
            </div>
         )}
 
