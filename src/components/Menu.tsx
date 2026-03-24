@@ -390,7 +390,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                 <p className="text-gray-500 font-bold uppercase tracking-widest mt-2">Configura a tua máquina para a próxima corrida. Mais veículos chegarão no futuro.</p>
              </div>
 
-             <div className="w-full max-w-4xl bg-[#1a1a24] border-2 border-gray-800 rounded-2xl p-10 flex flex-col md:flex-row gap-10 items-center justify-between shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+             <div className="w-full max-w-4xl bg-[#1a1a24] border-2 border-gray-800 rounded-2xl p-6 flex flex-col md:flex-row gap-6 items-center justify-between shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
                 
                 <div className="w-full md:w-1/2 flex flex-col gap-6">
                    <h3 className="text-white font-black text-2xl uppercase tracking-widest mb-2 border-b-2 border-[#E10600] pb-2 inline-block self-start">Classe: F1 2026</h3>

@@ -24,6 +24,9 @@ const DEFAULT_CONTROLS = [
   { up: 'KeyY', down: 'KeyH', left: 'KeyG', right: 'KeyJ' },
 ];
 
+const randomHex = () => '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+const defaultGuestName = 'PILOTO ' + Math.floor(Math.random() * 9999);
+
 export default function App() {
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -108,11 +111,11 @@ export default function App() {
   const [players, setPlayers] = useState<PlayerConfig[]>([
     {
       id: 1,
-      color: '#E10600',
-      color2: '#000000',
-      helmetColor: '#FFDD00',
+      color: randomHex(),
+      color2: randomHex(),
+      helmetColor: randomHex(),
       teamName: 'Garagem Pessoal',
-      driverName: 'PILOTO 1',
+      driverName: defaultGuestName,
       controls: DEFAULT_CONTROLS[0],
       isBot: false,
       difficulty: 1.0
@@ -138,7 +141,11 @@ export default function App() {
             setOnlineLobby(state);
         };
 
-        const onStartRace = () => {
+        const onStartRace = (data: any) => {
+            if (data && data.tracks) {
+                setSelectedTracks(data.tracks);
+                setTotalLaps(data.laps || 1);
+            }
             if (dbTracks.length > 0) {
                setAppState('playing');
             }
@@ -264,7 +271,7 @@ export default function App() {
   
   if (onlineLobby.length > 0) {
       activePlayers = onlineLobby.map((p, i) => {
-          const isLocal = p.userId === (user?.id || 1);
+          const isLocal = p.socketId === socket.id;
           return {
               id: p.socketId, // Maintain socket consistency for multiplayer targeting
               isBot: false,
@@ -280,18 +287,18 @@ export default function App() {
               isReady: p.isReady
           };
       });
-  } else if (user) {
+  } else if (user || players.length > 0) {
       // Fallback local se estiver a ligar
       activePlayers.push({
            id: 1,
            isBot: false,
            isLocal: true,
            controls: players[0]?.controls || { up: 'KeyQ', down: 'KeyA', left: 'KeyO', right: 'KeyP', camera: 'KeyC' },
-           driverName: players[0]?.driverName || user.pilot_name || 'PILOTO 1',
+           driverName: players[0]?.driverName || user?.pilot_name || defaultGuestName,
            teamName: 'Garagem Pessoal',
-           color: players[0]?.color || user.primary_color || '#E10600',
-           color2: players[0]?.color2 || user.secondary_color || '#000000',
-           helmetColor: players[0]?.helmetColor || user.helmet_color || '#FFDD00',
+           color: players[0]?.color || user?.primary_color || '#E10600',
+           color2: players[0]?.color2 || user?.secondary_color || '#000000',
+           helmetColor: players[0]?.helmetColor || user?.helmet_color || '#FFDD00',
            difficulty: 1.0,
            socketId: undefined,
            isReady: true
