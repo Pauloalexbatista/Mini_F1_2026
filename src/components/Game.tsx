@@ -1332,9 +1332,9 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       {!isSetupPhase && !raceFinished && startSequence >= 4 && (
          <div className="absolute bottom-8 right-8 w-48 h-48 bg-black/60 shadow-[0_0_30px_rgba(0,0,0,0.8)] backdrop-blur-md border-2 border-gray-800 rounded-2xl p-4 z-10 overflow-hidden">
             <svg viewBox={`${mapBounds.minX} ${mapBounds.minY} ${mapBounds.maxX - mapBounds.minX} ${mapBounds.maxY - mapBounds.minY}`} className="w-full h-full opacity-50 drop-shadow-lg">
-               <polygon points={spline.map(pt => `${pt[0]},${pt[1]}`).join(' ')} fill="none" stroke="#FFFFFF" strokeWidth={(mapBounds.maxX - mapBounds.minX) * 0.02} strokeLinejoin="round" />
+               <polygon points={spline.map(pt => `${pt.x},${pt.y}`).join(' ')} fill="none" stroke="#FFFFFF" strokeWidth={(mapBounds.maxX - mapBounds.minX) * 0.02} strokeLinejoin="round" />
                {rawTrack.pitNodes && rawTrack.pitNodes.length > 0 && (
-                  <polyline points={rawTrack.pitNodes.map(pt => `${pt[0]},${pt[1]}`).join(' ')} fill="none" stroke="#AAAAAA" strokeWidth={(mapBounds.maxX - mapBounds.minX) * 0.015} strokeLinejoin="round" strokeDasharray="5,5" />
+                  <polyline points={rawTrack.pitNodes.map(pt => `${pt.x},${pt.y}`).join(' ')} fill="none" stroke="#AAAAAA" strokeWidth={(mapBounds.maxX - mapBounds.minX) * 0.015} strokeLinejoin="round" strokeDasharray="5,5" />
                )}
             </svg>
             {players.map(p => (

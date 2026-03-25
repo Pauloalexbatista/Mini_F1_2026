@@ -150,36 +150,27 @@ export class AudioEngine {
     // Throttle injects instant RPM response before speed catches up!
     const simulatedRPM = (absSpeed * 0.70) + (throttle * 0.30);
     
-    // F1 V6 Hybrid Simulator: Deep, throaty mechanic roar (60Hz base)
-    const baseFreq = 60 + (simulatedRPM * 280); // 60Hz idle -> ~340Hz top speed (Lowered drastically to kill shrill)
+    // F1 V6 Hybrid Simulator: Deep, throaty mechanic roar (Lowered base freq and max freq for darker/hoarser sound)
+    const baseFreq = 50 + (simulatedRPM * 150);
     
     // Osc 1: The Main Exhaust (Thick and aggressive)
     engine.osc1.type = 'sawtooth';
     engine.osc1.frequency.setTargetAtTime(baseFreq, this.ctx.currentTime, 0.03);
     
-    // Osc 2: The Dissonant Engine Block (Low-Pass Triangle Chorus)
-    engine.osc2.type = 'triangle'; // Triangle chops off the harsh high-end frequencies entirely!
-    // Detuned by 1.5% to create acoustic beating (that classic hoarse/trembling engine sound), octave up
+    // Osc 2: The Dissonant Engine Block (Square wave creates a hoarse, grittier rasp at low registers)
+    engine.osc2.type = 'square';
+    // Detuned tightly to create thick acoustic beating (trembling engine sound), octave up
     engine.osc2.frequency.setTargetAtTime(baseFreq * 2.015, this.ctx.currentTime, 0.05);
 
     // Throttle pop & crackle (Volume spikes instantly on throttle application)
-    const targetVol1 = throttle > 0 ? 0.6 : (speed > 50 ? 0.3 : 0.1); 
-    const targetVol2 = throttle > 0 ? 0.6 : (speed > 50 ? 0.3 : 0.1); // Thick mixed volume for dissonant chorus
-
-    // Spatial volume falloff (assuming spatialVol is defined elsewhere or needs to be added)
-    // For now, let's assume a default or remove if not provided.
-    // Given the instruction, I will assume spatialVol is not part of this change and remove it.
-    // If spatialVol is intended to be a new variable, it should be defined.
-    // Since the instruction only provides the replacement block, I will remove the lines using `spatialVol`
-    // to ensure the code is syntactically correct and doesn't introduce undefined variables.
-    // If `spatialVol` is meant to be a new parameter or calculated value, it needs to be explicitly added.
-    // For now, I will use targetVol1 and targetVol2 directly.
+    const targetVol1 = throttle > 0 ? 0.3 : (speed > 50 ? 0.15 : 0.05); 
+    const targetVol2 = throttle > 0 ? 0.2 : (speed > 50 ? 0.1 : 0.05);
 
     engine.gain1.gain.setTargetAtTime(targetVol1, this.ctx.currentTime, 0.08);
     engine.gain2.gain.setTargetAtTime(targetVol2, this.ctx.currentTime, 0.05);
 
-    // Master volume 
-    const masterVol = 0.02 + (throttle * 0.06) + (absSpeed * 0.04);
+    // Master volume (Drastically reduced to keep sound deep but not ear-piercing)
+    const masterVol = 0.005 + (throttle * 0.015) + (absSpeed * 0.02);
     engine.masterGain.gain.setTargetAtTime(masterVol, this.ctx.currentTime, 0.05);
   }
 
