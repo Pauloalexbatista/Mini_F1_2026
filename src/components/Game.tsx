@@ -482,7 +482,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
 
       if (startSequence > 0 && startSequence < 4) { ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(GAME_WIDTH/2-80, 50, 160, 60); for(let i=0; i<3; i++) { ctx.beginPath(); ctx.arc(GAME_WIDTH/2-40+i*40, 80, 15, 0, Math.PI*2); ctx.fillStyle = startSequence > i ? (i===2 ? '#0F0' : '#F00') : '#333'; ctx.fill(); } }
       players.filter(p => !p.isBot).forEach(p => { 
-          const c = carsRef.current.find(x => x.id === p.id); 
+          const c = carsRef.current.find(x => String(x.id) === String(p.id)); 
           if (!c) return; 
           const tE = document.getElementById(`hud-time-${c.id}`); 
           if (tE) {
@@ -621,7 +621,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       {!isSetupPhase && !finalClassification && startSequence >= 4 && (
          <div className="absolute bottom-28 right-4 flex flex-col gap-1 z-10 w-64">
             {liveStandings.map((entry, idx) => {
-               const p = players.find(x => x.id === entry.id); if (!p) return null;
+               const p = players.find(x => String(x.id) === String(entry.id)); if (!p) return null;
                return (
                  <div key={entry.id} className="flex items-center bg-black/80 rounded-l border-l-4 overflow-hidden shadow-lg h-8" style={{borderColor: p.color}}>
                     <span className="w-6 text-center text-white font-black text-[10px] bg-gray-900 h-full flex items-center justify-center">{idx + 1}</span>
