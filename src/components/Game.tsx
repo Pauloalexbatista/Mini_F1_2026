@@ -286,21 +286,31 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       try {
         if (startSequence >= 4) {
           carsRef.current.forEach(car => {
-          if (car.finishTime !== null) return;
-          let minSplineDistSq = Infinity; let closestIndex = car.currentWaypoint;
-          let resolveX = car.x; let resolveY = car.y;
-          let searchRange = spline.length; if (car.currentWaypoint > 0) searchRange = 400; 
-
-          for (let s = 0; s <= searchRange * 2; s++) {
-             let i = (car.currentWaypoint - searchRange + s + spline.length) % spline.length;
-             if (searchRange === spline.length && s >= spline.length) break;
-             let nextI = (i + 1) % spline.length; const p1 = spline[i]; const p2 = spline[nextI];
-             const l2 = (p1.x - p2.x)**2 + (p1.y - p2.y)**2;
-             let t_seg = 0; if (l2 > 0) { t_seg = ((car.x - p1.x) * (p2.x - p1.x) + (car.y - p1.y) * (p2.y - p1.y)) / l2; t_seg = Math.max(0, Math.min(1, t_seg)); }
-             const projX = p1.x + t_seg * (p2.x - p1.x); const projY = p1.y + t_seg * (p2.y - p1.y);
-             const distSq = (car.x - projX)**2 + (car.y - projY)**2;
-             if (distSq < minSplineDistSq) { minSplineDistSq = distSq; closestIndex = t_seg < 0.5 ? i : nextI; resolveX = projX; resolveY = projY; }
+          const isFinished = car.finishTime !== null;
+          if (isFinished) {
+              car.vx = 0; car.vy = 0; car.angularVelocity = 0; car.throttle = 0; car.brake = 1;
           }
+          
+          let surface: 'TRACK' | 'CURB' | 'CURB_WIDE' | 'CURB_APEX' | 'GRASS' = 'TRACK';
+          let closestIndex = car.currentWaypoint;
+          let isInPitLane = false;
+          const speed_val = Math.sqrt(car.vx*car.vx + car.vy*car.vy);
+          
+          if (!isFinished) {
+              let minSplineDistSq = Infinity;
+              let resolveX = car.x; let resolveY = car.y;
+              let searchRange = spline.length; if (car.currentWaypoint > 0) searchRange = 400; 
+    
+              for (let s = 0; s <= searchRange * 2; s++) {
+                 let i = (car.currentWaypoint - searchRange + s + spline.length) % spline.length;
+                 if (searchRange === spline.length && s >= spline.length) break;
+                 let nextI = (i + 1) % spline.length; const p1 = spline[i]; const p2 = spline[nextI];
+                 const l2 = (p1.x - p2.x)**2 + (p1.y - p2.y)**2;
+                 let t_seg = 0; if (l2 > 0) { t_seg = ((car.x - p1.x) * (p2.x - p1.x) + (car.y - p1.y) * (p2.y - p1.y)) / l2; t_seg = Math.max(0, Math.min(1, t_seg)); }
+                 const projX = p1.x + t_seg * (p2.x - p1.x); const projY = p1.y + t_seg * (p2.y - p1.y);
+                 const distSq = (car.x - projX)**2 + (car.y - projY)**2;
+                 if (distSq < minSplineDistSq) { minSplineDistSq = distSq; closestIndex = t_seg < 0.5 ? i : nextI; resolveX = projX; resolveY = projY; }
+              }
           
           const closestNode = spline[closestIndex] || { width: 300 };
           const distToCenter = Math.sqrt(minSplineDistSq);
@@ -364,25 +374,37 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           
           carsRef.current.forEach(other => { if (other.id > car.id) { const tD = Math.abs(car.currentWaypoint - other.currentWaypoint); if (!(tD > 500 && tD < spline.length-500)) { const dx = other.x-car.x, dy = other.y-car.y, d = Math.sqrt(dx*dx+dy*dy); if (d < 40 && d > 0.1) { const nx = dx/d, ny = dy/d, rV = {x: car.vx-other.vx, y: car.vy-other.vy}; if (Math.abs(rV.x*nx+rV.y*ny) > 200) { car.damage = Math.min(90, car.damage+5); other.damage = Math.min(90, other.damage+5); } const push=(40-d)*0.5; car.x-=nx*push; car.y-=ny*push; other.x+=nx*push; other.y+=ny*push; if (rV.x*nx+rV.y*ny > 0) { const imp = 0.75 * (rV.x*nx+rV.y*ny); car.vx-=imp*nx; car.vy-=imp*ny; other.vx+=imp*nx; other.vy+=imp*ny; } } } } });
 
-          if (car.isLocal || car.isBot) {
+           if (!isFinished && (car.isLocal || car.isBot)) {
               updateCarPhysics(car, dt, surface);
               if (car.isLocal && socket.connected && now - lastEmitRef.current > 50) {
-                  // SYNC: Added laps, finishTime, currentWaypoint, and bestLapTime to telemetry
                   socket.emit('player_tick', { id: car.id, x: car.x, y: car.y, a: car.angle, vx: car.vx, vy: car.vy, s: car.steer, b: car.brake, t: car.throttle, laps: car.laps, ft: car.finishTime, cw: car.currentWaypoint, bl: car.bestLapTime });
                   lastEmitRef.current = now;
-               }
+              }
            }
-          audio.updateEngine(car.id, speed_val/1200, car.throttle, car.isBot);
-          if (speed_val > 100 && car.isSkidding) { skidMarksRef.current.push({ x: car.x, y: car.y, a: car.angle, w: 22 }); if (skidMarksRef.current.length > 3000) skidMarksRef.current.shift(); }
-          if (closestIndex > car.currentWaypoint && closestIndex < car.currentWaypoint + 400) car.currentWaypoint = closestIndex;
-          if (closestIndex < 20 && car.currentWaypoint > spline.length * 0.8) {
-             car.laps++; car.currentWaypoint = 0;
-             if (car.laps > 0 && car.currentLapStartTime) {
-                const lapT = now - car.currentLapStartTime; car.lastLapTime = lapT; if (!car.bestLapTime || lapT < car.bestLapTime) car.bestLapTime = lapT;
-                if (lapT < globalBestLapRef.current) { globalBestLapRef.current = lapT; const pD = players.find(p => p.id === car.id); setFastLapPopup({ name: pD?.driverName || (car.isBot ? 'BOT' : 'P'+car.id), time: formatTime(lapT), color: car.color, isInitial: false }); setTimeout(() => setFastLapPopup(null), 4000); }
-             }
-             car.currentLapStartTime = now;
-             if (car.laps >= totalLaps && totalLaps > 0 && car.finishTime === null) { car.finishTime = now - startTimeRef.current; if (!car.isBot && !car.scorePosted) { car.scorePosted = true; submitLapTime(car.finishTime); } }
+          } // CLOSE if (!isFinished) started at 298
+
+          const speed_val_final = Math.sqrt(car.vx*car.vx + car.vy*car.vy);
+          audio.updateEngine(car.id, speed_val_final/1200, car.throttle, car.isBot);
+
+          if (!isFinished) {
+              if (speed_val_final > 100 && car.isSkidding) { skidMarksRef.current.push({ x: car.x, y: car.y, a: car.angle, w: 22 }); if (skidMarksRef.current.length > 3000) skidMarksRef.current.shift(); }
+              if (closestIndex > car.currentWaypoint && closestIndex < car.currentWaypoint + 400) car.currentWaypoint = closestIndex;
+              if (closestIndex < 20 && car.currentWaypoint > spline.length * 0.8) {
+                 car.laps++; car.currentWaypoint = 0;
+                 if (car.laps > 0 && car.currentLapStartTime) {
+                    const lapT = now - car.currentLapStartTime; car.lastLapTime = lapT; if (!car.bestLapTime || lapT < car.bestLapTime) car.bestLapTime = lapT;
+                    if (lapT < globalBestLapRef.current) { globalBestLapRef.current = lapT; const pD = players.find(p => p.id === car.id); setFastLapPopup({ name: pD?.driverName || (car.isBot ? 'BOT' : 'P'+car.id), time: formatTime(lapT), color: car.color, isInitial: false }); setTimeout(() => setFastLapPopup(null), 4000); }
+                 }
+                 car.currentLapStartTime = now;
+                 if (car.laps >= totalLaps && totalLaps > 0 && car.finishTime === null) { 
+                    car.finishTime = now - startTimeRef.current; 
+                    if (!car.isBot && !car.scorePosted) { 
+                        car.scorePosted = true; 
+                        if (car.bestLapTime) submitLapTime(car.bestLapTime); 
+                        else submitLapTime(car.finishTime / totalLaps);
+                    } 
+                 }
+              }
           }
         });
 
@@ -527,24 +549,56 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
        )}
 
        {!isSetupPhase && !raceFinished && startSequence >= 4 && (
-         <div className="absolute bottom-8 left-0 flex flex-col gap-2 z-10">
-            {players.filter(p => !p.isBot).map(p => ( <div key={p.id} className="bg-black/80 border-l-4 p-3 rounded-r-xl w-64 shadow-2xl flex flex-col" style={{borderColor: p.color}}><span className="text-white font-black text-xl italic uppercase">{p.driverName || 'P'+p.id}</span><div className="flex justify-between"><div className="text-[10px] text-gray-500 font-bold uppercase">Tempo <span id={`hud-time-${p.id}`} className="text-yellow-400 font-mono text-base">00:00.00</span></div><div className="text-[10px] text-gray-500 font-bold uppercase">L<span id={`hud-lap-${p.id}`} className="text-white font-black text-base">1/{totalLaps}</span></div></div></div> ))}
+         <div className="absolute bottom-12 left-8 flex flex-col gap-2 z-10">
+            {players.filter(p => !p.isBot && p.isLocal).map(p => ( 
+               <div key={p.id} className="bg-black/80 border-l-4 p-4 rounded-r-xl w-72 shadow-2xl flex flex-col border-white/20" style={{borderLeftColor: p.color}}>
+                  <div className="flex items-center gap-2 mb-1">
+                     <span className="w-3 h-3 rounded-full animate-pulse" style={{backgroundColor: p.color}}></span>
+                     <span className="text-white font-black text-2xl italic uppercase tracking-tighter">{p.driverName || 'DRIVER'}</span>
+                  </div>
+                  <div className="flex justify-between items-end">
+                     <div className="flex flex-col">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase mb-[-4px]">Live Time</span>
+                        <span id={`hud-time-${p.id}`} className="text-yellow-400 font-mono text-2xl tabular-nums">00:00.00</span>
+                     </div>
+                     <div className="flex flex-col items-end">
+                        <span className="text-[10px] text-gray-400 font-bold uppercase mb-[-4px]">Volta</span>
+                        <span id={`hud-lap-${p.id}`} className="text-white font-black text-2xl italic">1 <span className="text-gray-500 text-sm">/ {totalLaps}</span></span>
+                     </div>
+                  </div>
+               </div> 
+            ))}
          </div>
       )}
 
       {!isSetupPhase && !raceFinished && startSequence >= 4 && (
          <div className="absolute top-4 right-4 text-white text-[10px] sm:text-xs opacity-50 text-right space-y-1 font-bold tracking-widest uppercase z-10 pointer-events-none">
-            {players.filter(p => !p.isBot && p.isLocal).slice(0, 1).map(p => {
-               const c = p.controls || { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', camera: 'KeyC' };
-               return (
-                 <React.Fragment key="controls-hint">
-                    <p><span className="text-[#E10600] inline-block text-center w-5">{c.up?.replace('Key','')?.replace('Arrow','▲')}</span> ACELERAR</p>
-                    <p><span className="text-[#E10600] inline-block text-center w-5">{c.down?.replace('Key','')?.replace('Arrow','▼')}</span> TRAVAR</p>
-                    <p><span className="text-[#E10600] inline-block text-center w-5">{c.left?.replace('Key','')?.replace('Arrow','◀')}</span> VIRAR <span className="text-[#E10600] inline-block text-center w-5">{c.right?.replace('Key','')?.replace('Arrow','▶')}</span></p>
-                    <p><span className="text-yellow-500 inline-block text-center w-5">{c.camera?.replace('Key','')?.replace('Arrow','C')}</span> CÂMARA</p>
-                 </React.Fragment>
-               );
-            })}
+             {players.filter(p => !p.isBot && p.isLocal).slice(0, 1).map(p => {
+                const c = p.controls || { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', camera: 'KeyC' };
+                return (
+                  <div key="controls-hint" className="grid grid-cols-2 gap-x-2 gap-y-3">
+                     <div className="flex items-center gap-2">
+                        <kbd className="w-8 h-8 rounded bg-white text-black font-black flex items-center justify-center text-sm shadow-[0_2px_0_#ccc] uppercase">{c.up?.replace('Key','')?.replace('Arrow','▲')}</kbd>
+                        <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">GAS</span>
+                     </div>
+                     <div className="flex items-center gap-2">
+                        <kbd className="w-8 h-8 rounded bg-[#E10600] text-white font-black flex items-center justify-center text-sm shadow-[0_2px_0_#900] uppercase">{c.down?.replace('Key','')?.replace('Arrow','▼')}</kbd>
+                        <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">STOP</span>
+                     </div>
+                     <div className="flex items-center gap-2">
+                        <div className="flex bg-white/10 rounded p-0.5 border border-white/10 gap-0.5">
+                           <kbd className="w-6 h-7 rounded bg-white text-black font-black flex items-center justify-center text-[10px] uppercase">{c.left?.replace('Key','')?.replace('Arrow','◀')}</kbd>
+                           <kbd className="w-6 h-7 rounded bg-white text-black font-black flex items-center justify-center text-[10px] uppercase">{c.right?.replace('Key','')?.replace('Arrow','▶')}</kbd>
+                        </div>
+                        <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">TURN</span>
+                     </div>
+                     <div className="flex items-center gap-2">
+                        <kbd className="w-8 h-8 rounded bg-yellow-400 text-black font-black flex items-center justify-center text-sm shadow-[0_2px_0_#b80] uppercase">{c.camera?.replace('Key','')?.replace('Arrow', 'C')}</kbd>
+                        <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">CAM</span>
+                     </div>
+                  </div>
+                );
+             })}
          </div>
       )}
       {!isSetupPhase && !raceFinished && startSequence >= 4 && (
@@ -566,11 +620,12 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
             })}
          </div>
       )}
-      {!isSetupPhase && !raceFinished && startSequence >= 4 && (
-         <div className="absolute bottom-8 right-8 w-48 h-48 bg-black/60 border-2 border-gray-800 rounded-2xl p-4 z-10 overflow-hidden">
-            <svg viewBox={`${mapBounds.minX} ${mapBounds.minY} ${mapBounds.maxX - mapBounds.minX} ${mapBounds.maxY - mapBounds.minY}`} className="w-full h-full opacity-70" preserveAspectRatio="xMidYMid meet">
-               <polygon points={spline.map(pt => `${pt.x},${pt.y}`).join(' ')} fill="none" stroke="#FFF" strokeWidth={(mapBounds.maxX-mapBounds.minX)*0.015} strokeLinejoin="round" />
-               {players.map(p => ( <circle key={`dot-${p.id}`} id={`minimap-dot-${p.id}`} cx="0" cy="0" r={(mapBounds.maxX-mapBounds.minX)*0.025} fill={p.color} stroke="#FFF" strokeWidth={(mapBounds.maxX-mapBounds.minX)*0.008} className="transition-all duration-75 origin-center" /> ))}
+      {!isSetupPhase && (
+         <div className="absolute top-4 left-4 z-10 p-2 bg-black/60 backdrop-blur-lg rounded-2xl border-2 border-white/20 shadow-[0_0_30px_rgba(0,0,0,0.5)] overflow-hidden" style={{ width: 220, height: 220 }}>
+            <svg viewBox={`${mapBounds.minX} ${mapBounds.minY} ${mapBounds.maxX - mapBounds.minX} ${mapBounds.maxY - mapBounds.minY}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+               <polygon points={spline.map(pt => `${pt.x},${pt.y}`).join(' ')} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={(mapBounds.maxX-mapBounds.minX)*0.04} strokeLinejoin="round" />
+               <polygon points={spline.map(pt => `${pt.x},${pt.y}`).join(' ')} fill="none" stroke="#FFF" strokeWidth={(mapBounds.maxX-mapBounds.minX)*0.015} strokeLinejoin="round" opacity="0.8" />
+               {players.map(p => ( <circle key={`dot-${p.id}`} id={`minimap-dot-${p.id}`} cx="0" cy="0" r={(mapBounds.maxX-mapBounds.minX)*0.035} fill={p.color} stroke="#FFF" strokeWidth={(mapBounds.maxX-mapBounds.minX)*0.01} className="transition-all duration-75 origin-center shadow-lg" /> ))}
             </svg>
          </div>
       )}
