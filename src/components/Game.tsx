@@ -59,6 +59,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   const globalBestLapRef = useRef<number>(Infinity);
   const [fastLapPopup, setFastLapPopup] = useState<{name: string, time: string, color: string, isInitial: boolean} | null>(null);
   const [liveStandings, setLiveStandings] = useState<{id: number, bestLapMs: number | null, isFastestLap: boolean}[]>([]);
+  const [raceEndCountdown, setRaceEndCountdown] = useState<number | null>(null);
   const raceGraceEndTimeRef = useRef<number | null>(null);
   
   const carsRef = useRef<CarPhysics[]>([]);
@@ -113,7 +114,13 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
                  isFastestLap: (c.bestLapTime !== null && c.bestLapTime === globalBestLapRef.current && globalBestLapRef.current !== Infinity)
              }));
              
-             socket.emit('host_live_standings', standingsData);
+             let countdownRemaining = null;
+             if (raceGraceEndTimeRef.current !== null) {
+                 countdownRemaining = Math.max(0, Math.ceil((raceGraceEndTimeRef.current - Date.now()) / 1000));
+                 setRaceEndCountdown(countdownRemaining);
+             }
+
+             socket.emit('host_live_standings', { standings: standingsData, countdown: countdownRemaining });
              setLiveStandings(standingsData);
          }
      }, 500);
@@ -122,8 +129,9 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
 
   useEffect(() => {
     if (isHost) return;
-    const onLiveStandings = (data: any[]) => {
-        setLiveStandings(data);
+    const onLiveStandings = (data: any) => {
+        if (data.standings) setLiveStandings(data.standings);
+        if (data.countdown !== undefined) setRaceEndCountdown(data.countdown);
     };
     socket.on('live_standings', onLiveStandings);
     return () => { socket.off('live_standings', onLiveStandings); };
@@ -505,10 +513,20 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
                </div>
             </div>
             {localSetupReady ? ( <div className="px-12 py-5 bg-gray-800 text-gray-400 font-black text-2xl animate-pulse">A AGUARDAR ADVERSÁRIO...</div> ) : ( <button onClick={() => { if (players.some(p => !p.isBot && !p.isLocal)) { setLocalSetupReady(true); socket.emit('setup_ready'); } else { setIsSetupPhase(false); setStartSequence(1); } }} className="px-12 py-5 bg-green-600 hover:bg-green-500 text-white font-black text-3xl italic rounded">IR PARA A PISTA</button> )}
-         </div>
-      )}
-      {fastLapPopup && !raceFinished && startSequence >= 4 && ( <div className="absolute bottom-8 right-8 z-50 flex flex-col items-end animate-pulse"><div className="bg-black/90 px-8 py-3 border-t-4" style={{borderColor: fastLapPopup.color}}><span className="text-xl font-bold uppercase text-white">NOVA VOLTA RÁPIDA!</span><div className="text-5xl font-black text-white">{fastLapPopup.time}</div></div><div className="px-12 py-2 text-black font-black uppercase text-2xl" style={{backgroundColor: fastLapPopup.color}}>{fastLapPopup.name}</div></div> )}
-      {!isSetupPhase && !raceFinished && startSequence >= 4 && (
+          </div>
+       )}
+       {fastLapPopup && !raceFinished && startSequence >= 4 && ( <div className="absolute bottom-8 left-8 z-50 flex flex-col items-start animate-pulse"><div className="bg-black/90 px-8 py-3 border-t-4" style={{borderColor: fastLapPopup.color}}><span className="text-xl font-bold uppercase text-white">NOVA VOLTA RÁPIDA!</span><div className="text-5xl font-black text-white">{fastLapPopup.time}</div></div><div className="px-12 py-2 text-black font-black uppercase text-2xl" style={{backgroundColor: fastLapPopup.color}}>{fastLapPopup.name}</div></div> )}
+       
+       {raceEndCountdown !== null && !raceFinished && (
+          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center">
+             <div className="bg-red-600/90 text-white font-black italic tracking-tighter text-4xl px-12 py-4 rounded-xl shadow-[0_0_50px_rgba(225,6,0,0.5)] border-2 border-white/20 animate-bounce">
+                A CONCLUIR PROVA EM {raceEndCountdown}s
+             </div>
+             <p className="text-white/50 font-bold uppercase tracking-widest text-[10px] mt-3">A FIA está a encerrar a sessão devido ao tempo limite</p>
+          </div>
+       )}
+
+       {!isSetupPhase && !raceFinished && startSequence >= 4 && (
          <div className="absolute bottom-8 left-0 flex flex-col gap-2 z-10">
             {players.filter(p => !p.isBot).map(p => ( <div key={p.id} className="bg-black/80 border-l-4 p-3 rounded-r-xl w-64 shadow-2xl flex flex-col" style={{borderColor: p.color}}><span className="text-white font-black text-xl italic uppercase">{p.driverName || 'P'+p.id}</span><div className="flex justify-between"><div className="text-[10px] text-gray-500 font-bold uppercase">Tempo <span id={`hud-time-${p.id}`} className="text-yellow-400 font-mono text-base">00:00.00</span></div><div className="text-[10px] text-gray-500 font-bold uppercase">L<span id={`hud-lap-${p.id}`} className="text-white font-black text-base">1/{totalLaps}</span></div></div></div> ))}
          </div>
