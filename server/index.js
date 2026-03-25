@@ -92,7 +92,8 @@ app.post('/api/login', async (req, res) => {
        selected_car_id: userRow.selected_car_id,
        primary_color: userRow.primary_color || '#E10600',
        secondary_color: userRow.secondary_color || '#000000',
-       helmet_color: userRow.helmet_color || '#FFDD00'
+       helmet_color: userRow.helmet_color || '#FFDD00',
+       controls: userRow.controls ? JSON.parse(userRow.controls) : undefined
     };
     
     const token = jwt.sign(user, JWT_SECRET);

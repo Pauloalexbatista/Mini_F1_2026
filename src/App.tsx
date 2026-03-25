@@ -414,6 +414,7 @@ export default function App() {
                  color2: loggedUser.secondary_color || '#000000',
                  helmetColor: loggedUser.helmet_color || '#FFDD00',
                  driverName: loggedUser.pilot_name || loggedUser.username || 'PILOTO 1',
+                 controls: loggedUser.controls || np[0].controls,
                  teamName: 'Garagem Pessoal'
              };
              return np;

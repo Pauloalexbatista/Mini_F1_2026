@@ -280,14 +280,14 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
             pitDistToCenter = Math.sqrt(pitDistToCenter);
           }
 
-          let surface: \'TRACK\' | \'CURB\' | \'CURB_WIDE\' | \'CURB_APEX\' | \'GRASS\' = \'TRACK\';
+          let surface: 'TRACK' | 'CURB' | 'CURB_WIDE' | 'CURB_APEX' | 'GRASS' = 'TRACK';
           let isInPitLane = (pitSpline && closestPitIndex >= 0 && pitDistToCenter < pitSpline[closestPitIndex].width * 0.5 && pitDistToCenter < distToCenter);
           if (!isInPitLane) {
              let extT = closestNode.isExtendedTight || false; let apT = closestNode.isApexTight || false;
-             if (apT && distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.95) surface = distToCenter > trackWidth * 0.8 ? \'CURB_APEX\' : (distToCenter > trackWidth * 0.65 ? \'CURB_WIDE\' : \'CURB\');
-             else if (extT && distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.80) surface = distToCenter > trackWidth * 0.65 ? \'CURB_WIDE\' : \'CURB\';
-             else if (distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.65) surface = \'CURB\';
-             else if (distToCenter > trackWidth * 0.5) surface = \'GRASS\';
+             if (apT && distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.95) surface = distToCenter > trackWidth * 0.8 ? 'CURB_APEX' : (distToCenter > trackWidth * 0.65 ? 'CURB_WIDE' : 'CURB');
+             else if (extT && distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.80) surface = distToCenter > trackWidth * 0.65 ? 'CURB_WIDE' : 'CURB';
+             else if (distToCenter > trackWidth * 0.5 && distToCenter <= trackWidth * 0.65) surface = 'CURB';
+             else if (distToCenter > trackWidth * 0.5) surface = 'GRASS';
           }
 
           const mW = closestNode.maxWallRadius || (trackWidth * 1.70);
@@ -309,13 +309,13 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
             const rawT = tArr[tIdx] || { x: 0, y: 0 };
             const tAngle = Math.atan2(rawT.y - car.y, rawT.x - car.x); let aD = Math.atan2(Math.sin(tAngle-car.angle), Math.cos(tAngle-car.angle));
             car.steer = Math.max(-1, Math.min(1, aD * Math.max(1.5, 4.0 - (speed_val/120))));
-            const sSpd = (surface===\'GRASS\') ? car.maxSpeed*0.3 : car.maxSpeed * Math.max(0.2, 1.0 - (Math.max(0, Math.abs(aD)-0.05)*3.5));
+            const sSpd = (surface==='GRASS') ? car.maxSpeed*0.3 : car.maxSpeed * Math.max(0.2, 1.0 - (Math.max(0, Math.abs(aD)-0.05)*3.5));
             if (speed_val < sSpd - 5) car.throttle = 1.0; else if (speed_val > sSpd + 15) car.brake = Math.min(1, (speed_val-sSpd)/100);
           } else if (car.isLocal) {
-            if (car.controls) { if (keysRef.current[car.controls.up]) car.throttle = (surface === \'GRASS\' ? 0.4 : 1.0); if (keysRef.current[car.controls.down]) car.brake = 1.0; const sL = Math.max(0.70, 1.0 - (speed_val/1200)); if (keysRef.current[car.controls.left]) car.steer = -sL; if (keysRef.current[car.controls.right]) car.steer = sL; }
+            if (car.controls) { if (keysRef.current[car.controls.up]) car.throttle = (surface === 'GRASS' ? 0.4 : 1.0); if (keysRef.current[car.controls.down]) car.brake = 1.0; const sL = Math.max(0.70, 1.0 - (speed_val/1200)); if (keysRef.current[car.controls.left]) car.steer = -sL; if (keysRef.current[car.controls.right]) car.steer = sL; }
           } else if (car.remoteTarget) { car.x += (car.remoteTarget.x - car.x) * 0.3; car.y += (car.remoteTarget.y - car.y) * 0.3; let ad = Math.atan2(Math.sin(car.remoteTarget.a-car.angle), Math.cos(car.remoteTarget.a-car.angle)); car.angle += ad * 0.3; }
 
-          if (surface === \'GRASS\') { car.damage = Math.min(90, car.damage + 0.01); if (speed_val > car.maxSpeed * 0.6) { car.vx *= 0.98; car.vy *= 0.98; } }
+          if (surface === 'GRASS') { car.damage = Math.min(90, car.damage + 0.01); if (speed_val > car.maxSpeed * 0.6) { car.vx *= 0.98; car.vy *= 0.98; } }
           if (isInPitLane && pitSpline && closestPitIndex >= 0) {
             const pitN = pitSpline[closestPitIndex]; const pitM = pitSpline[pitSpline.length-1].distFromStart || 0;
             if (pitN.distFromStart! > 1000 && pitN.distFromStart! < pitM - 1000) {
@@ -330,7 +330,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
               updateCarPhysics(car, dt, surface);
               if (car.isLocal && socket.connected && now - lastEmitRef.current > 50) {
                  // SYNC: Added laps, finishTime, and currentWaypoint to telemetry
-                 socket.emit(\'player_tick\', { id: car.id, x: car.x, y: car.y, a: car.angle, vx: car.vx, vy: car.vy, s: car.steer, b: car.brake, t: car.throttle, laps: car.laps, ft: car.finishTime, cw: car.currentWaypoint });
+                 socket.emit('player_tick', { id: car.id, x: car.x, y: car.y, a: car.angle, vx: car.vx, vy: car.vy, s: car.steer, b: car.brake, t: car.throttle, laps: car.laps, ft: car.finishTime, cw: car.currentWaypoint });
                  lastEmitRef.current = now;
               }
           }
@@ -341,7 +341,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
              car.laps++; car.currentWaypoint = 0;
              if (car.laps > 0 && car.currentLapStartTime) {
                 const lapT = now - car.currentLapStartTime; car.lastLapTime = lapT; if (!car.bestLapTime || lapT < car.bestLapTime) car.bestLapTime = lapT;
-                if (lapT < globalBestLapRef.current) { globalBestLapRef.current = lapT; const pD = players.find(p => p.id === car.id); setFastLapPopup({ name: pD?.driverName || (car.isBot ? \'BOT\' : \'P\'+car.id), time: formatTime(lapT), color: car.color, isInitial: false }); setTimeout(() => setFastLapPopup(null), 4000); }
+                if (lapT < globalBestLapRef.current) { globalBestLapRef.current = lapT; const pD = players.find(p => p.id === car.id); setFastLapPopup({ name: pD?.driverName || (car.isBot ? 'BOT' : 'P'+car.id), time: formatTime(lapT), color: car.color, isInitial: false }); setTimeout(() => setFastLapPopup(null), 4000); }
              }
              car.currentLapStartTime = now;
              if (car.laps >= totalLaps && totalLaps > 0 && car.finishTime === null) { car.finishTime = now - startTimeRef.current; if (!car.isBot && !car.scorePosted) { car.scorePosted = true; submitLapTime(car.finishTime); } }
@@ -357,7 +357,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
        }
       } catch (e: any) { console.error("F1 PHYSICS ENGINE CRASH:", e); }
 
-      const ctx = canvasRef.current?.getContext(\'2d\'); if (!ctx) return;
+      const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
       GAME_WIDTH = canvasRef.current.width; GAME_HEIGHT = canvasRef.current.height;
       const mainCar = carsRef.current.find(c => c.isLocal) || carsRef.current.find(c => !c.isBot) || carsRef.current[0] || { x:0,y:0,vx:0,vy:0,angle:0,currentWaypoint:0 };
       const spd = Math.sqrt(mainCar.vx**2 + mainCar.vy**2);
@@ -368,8 +368,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       let aDiff = Math.atan2(Math.sin(lookA-camAngleRef.current), Math.cos(lookA-camAngleRef.current)); if (spd > 2) camAngleRef.current += aDiff * 0.05;
 
       let offX = 0, offY = 0;
-      if (cameraModeRef.current === \'DYNAMIC\' && startSequence >= 4) { offX = -Math.cos(camAngleRef.current)*(Math.min(1, spd/1000)*GAME_WIDTH*0.35); offY = -Math.sin(camAngleRef.current)*(Math.min(1, spd/1000)*GAME_HEIGHT*0.35); }
-      else if (cameraModeRef.current === \'QUADRANTS\' && startSequence >= 4) { offX = -Math.cos(camAngleRef.current)*GAME_WIDTH*0.25; offY = -Math.sin(camAngleRef.current)*GAME_HEIGHT*0.25; }
+      if (cameraModeRef.current === 'DYNAMIC' && startSequence >= 4) { offX = -Math.cos(camAngleRef.current)*(Math.min(1, spd/1000)*GAME_WIDTH*0.35); offY = -Math.sin(camAngleRef.current)*(Math.min(1, spd/1000)*GAME_HEIGHT*0.35); }
+      else if (cameraModeRef.current === 'QUADRANTS' && startSequence >= 4) { offX = -Math.cos(camAngleRef.current)*GAME_WIDTH*0.25; offY = -Math.sin(camAngleRef.current)*GAME_HEIGHT*0.25; }
       
       if (!cameraRef.current) cameraRef.current = { x: mainCar.x, y: mainCar.y, scale: 0.08 };
       cameraRef.current.x += (mainCar.x - cameraRef.current.x) * 0.3; cameraRef.current.y += (mainCar.y - cameraRef.current.y) * 0.3;
@@ -377,28 +377,27 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       quadOffsetRef.current.x += (offX - quadOffsetRef.current.x) * 0.05; quadOffsetRef.current.y += (offY - quadOffsetRef.current.y) * 0.05;
 
       ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-      ctx.fillStyle = \'#315722\'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      ctx.fillStyle = '#315722'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       ctx.save();
       ctx.translate(Math.round(GAME_WIDTH/2+quadOffsetRef.current.x), Math.round(GAME_HEIGHT/2+quadOffsetRef.current.y)); ctx.scale(cameraRef.current.scale, cameraRef.current.scale); ctx.translate(Math.round(-cameraRef.current.x), Math.round(-cameraRef.current.y));
       drawTrack(ctx, spline, pitSpline, false); drawEnvironments(ctx, spline, pitSpline, false);
-      skidMarksRef.current.forEach(sm => { ctx.save(); ctx.translate(sm.x, sm.y); ctx.rotate(sm.a); ctx.fillStyle=\'rgba(10,10,10,0.5)\'; ctx.fillRect(-sm.w/2, -5, sm.w, 10); ctx.restore(); });
-      carsRef.current.forEach(c => { if (spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); drawF1Car(ctx, c.color, c.color2 || \'#222\', c.helmetColor || \'#FFDD00\', c.drsEnabled); ctx.restore(); });
+      skidMarksRef.current.forEach(sm => { ctx.save(); ctx.translate(sm.x, sm.y); ctx.rotate(sm.a); ctx.fillStyle='rgba(10,10,10,0.5)'; ctx.fillRect(-sm.w/2, -5, sm.w, 10); ctx.restore(); });
+      carsRef.current.forEach(c => { if (spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); ctx.restore(); });
       drawBridges3D(ctx, spline);
-      carsRef.current.forEach(c => { if (!spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); drawF1Car(ctx, c.color, c.color2 || \'#222\', c.helmetColor || \'#FFDD00\', c.drsEnabled); ctx.restore(); });
+      carsRef.current.forEach(c => { if (!spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); ctx.restore(); });
       ctx.restore();
 
-      const hX = GAME_WIDTH/2, hY = GAME_HEIGHT-80; ctx.fillStyle = \'rgba(0,0,0,0.85)\'; ctx.fillRect(hX-290, hY, 580, 60); ctx.fillStyle = \'#FFF\'; ctx.fillRect(hX-270, hY+10, 85, 40);
-      ctx.font = \'900 36px monospace\'; ctx.fillStyle = \'#000\'; ctx.textAlign = \'right\'; ctx.fillText(`${Math.min(999, Math.ceil(spd*0.36)).toString().padStart(3, \'0\')}`, hX-190, hY+41);
-      ctx.font = \'bold 18px monospace\'; ctx.fillStyle = \'#FFF\'; ctx.textAlign = \'left\'; ctx.fillText("KM/H", hX-180, hY+38);
-      ctx.textAlign = \'right\'; ctx.fillStyle = \'#AAA\'; ctx.fillText("MOTOR", hX-10, hY+38);
-      const eH = Math.floor(100 - mainCar.damage); ctx.fillStyle = eH < 20 ? \'#F00\' : (eH < 50 ? \'#FD0\' : \'#0F0\'); ctx.textAlign = \'left\'; ctx.font=\'900 36px monospace\'; ctx.fillText(`${eH}%`, hX, hY+41);
-      ctx.textAlign = \'right\'; ctx.fillStyle = \'#AAA\'; ctx.font=\'bold 18px monospace\'; ctx.fillText("PNEUS", hX+150, hY+38);
-      const tH = (mainCar.tireHealth || 100).toFixed(1); ctx.textAlign = \'left\'; ctx.fillStyle = parseFloat(tH) < 40 ? \'#F00\' : (parseFloat(tH) < 70 ? \'#FD0\' : \'#0F0\'); ctx.font=\'900 36px monospace\'; ctx.fillText(`${tH}%`, hX+160, hY+41);
+      const hX = GAME_WIDTH/2, hY = GAME_HEIGHT-80; ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(hX-290, hY, 580, 60); ctx.fillStyle = '#FFF'; ctx.fillRect(hX-270, hY+10, 85, 40);
+      ctx.font = '900 36px monospace'; ctx.fillStyle = '#000'; ctx.textAlign = 'right'; ctx.fillText(`${Math.min(999, Math.ceil(spd*0.36)).toString().padStart(3, '0')}`, hX-190, hY+41);
+      ctx.font = 'bold 18px monospace'; ctx.fillStyle = '#FFF'; ctx.textAlign = 'left'; ctx.fillText("KM/H", hX-180, hY+38);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#AAA'; ctx.fillText("MOTOR", hX-10, hY+38);
+      const eH = Math.floor(100 - mainCar.damage); ctx.fillStyle = eH < 20 ? '#F00' : (eH < 50 ? '#FD0' : '#0F0'); ctx.textAlign = 'left'; ctx.font='900 36px monospace'; ctx.fillText(`${eH}%`, hX, hY+41);
+      ctx.textAlign = 'right'; ctx.fillStyle = '#AAA'; ctx.font='bold 18px monospace'; ctx.fillText("PNEUS", hX+150, hY+38);
+      const tH = (mainCar.tireHealth || 100).toFixed(1); ctx.textAlign = 'left'; ctx.fillStyle = parseFloat(tH) < 40 ? '#F00' : (parseFloat(tH) < 70 ? '#FD0' : '#0F0'); ctx.font='900 36px monospace'; ctx.fillText(`${tH}%`, hX+160, hY+41);
 
-      if (startSequence > 0 && startSequence < 4) { ctx.fillStyle = \'rgba(0,0,0,0.8)\'; ctx.fillRect(GAME_WIDTH/2-80, 50, 160, 60); for(let i=0; i<3; i++) { ctx.beginPath(); ctx.arc(GAME_WIDTH/2-40+i*40, 80, 15, 0, Math.PI*2); ctx.fillStyle = startSequence > i ? (i===2 ? \'#0F0\' : \'#F00\') : \'#333\'; ctx.fill(); } }
+      if (startSequence > 0 && startSequence < 4) { ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(GAME_WIDTH/2-80, 50, 160, 60); for(let i=0; i<3; i++) { ctx.beginPath(); ctx.arc(GAME_WIDTH/2-40+i*40, 80, 15, 0, Math.PI*2); ctx.fillStyle = startSequence > i ? (i===2 ? '#0F0' : '#F00') : '#333'; ctx.fill(); } }
       players.filter(p => !p.isBot).forEach(p => { const c = carsRef.current.find(x => x.id === p.id); if (!c) return; const tE = document.getElementById(`hud-time-${c.id}`); if (tE) tE.innerText = formatTime(Date.now() - (c.currentLapStartTime || startTimeRef.current || Date.now())); const lE = document.getElementById(`hud-lap-${c.id}`); if (lE) lE.innerText = `${Math.max(1, c.laps + 1)}/${totalLaps}`; });
-      const mW_m = mapBounds.maxX - mapBounds.minX, mH_m = mapBounds.maxY - mapBounds.minY;
-      carsRef.current.forEach(c => { const dot = document.getElementById(`minimap-dot-${c.id}`); if (dot) { dot.style.left = `${((c.x - mapBounds.minX) / mW_m) * 100}%`; dot.style.top = `${((c.y - mapBounds.minY) / mH_m) * 100}%`; } });
+      carsRef.current.forEach(c => { const dot = document.getElementById(`minimap-dot-${c.id}`); if (dot) { dot.setAttribute('cx', c.x.toString()); dot.setAttribute('cy', c.y.toString()); } });
       animationFrameId = requestAnimationFrame(update);
     };
     animationFrameId = requestAnimationFrame(update);
@@ -407,7 +406,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
 
   return (
     <div className="w-full h-full absolute inset-0 bg-[#15151e] overflow-hidden">
-      <canvas ref={canvasRef} className={`absolute inset-0 w-full h-full z-0 block ${isSetupPhase ? \'blur-md opacity-60\' : \'\'}`} />
+      <canvas ref={canvasRef} className={`absolute inset-0 w-full h-full z-0 block ${isSetupPhase ? 'blur-md opacity-60' : ''}`} />
       {isSetupPhase && (
          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-8 bg-[#111116]/80 backdrop-blur-md overflow-y-auto">
             <h1 className="text-5xl md:text-7xl text-white font-black italic uppercase tracking-tighter mb-2 text-center mt-12">PARC FERMÉ</h1>
@@ -435,7 +434,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
                          <div className="bg-[#111116] rounded-lg p-6 border border-gray-800">
                             {(() => {
                                const curS = playerSetups[p.id] || 260; const curSet = getSetupFromSpeed(curS);
-                               let sN = \'BALANCED\', sC = \'text-white\'; if (curS >= 320) { sN = \'FULL SPEED (MONZA)\'; sC = \'text-blue-400\'; } else if (curS <= 200) { sN = \'FULL CURVE (MÓNACO)\'; sC = \'text-[#E10600]\'; }
+                               let sN = 'BALANCED', sC = 'text-white'; if (curS >= 320) { sN = 'FULL SPEED (MONZA)'; sC = 'text-blue-400'; } else if (curS <= 200) { sN = 'FULL CURVE (MÓNACO)'; sC = 'text-[#E10600]'; }
                                return ( <>
                                   <div className="flex justify-between items-end mb-8"><span className={`text-2xl font-black italic ${sC}`}>{sN}</span><span className="text-4xl font-black text-white">{curS} KM/H</span></div>
                                   <input type="range" min="160" max="360" step="10" value={curS} onChange={(e) => setPlayerSetups(prev => ({ ...prev, [p.id]: parseInt(e.target.value) }))} className="w-full mb-8 h-2 bg-gray-800 rounded-lg appearance-none cursor-pointer" />
@@ -450,30 +449,48 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
                    ))}
                </div>
             </div>
-            {localSetupReady ? ( <div className="px-12 py-5 bg-gray-800 text-gray-400 font-black text-2xl animate-pulse">A AGUARDAR ADVERSÁRIO...</div> ) : ( <button onClick={() => { if (players.some(p => !p.isBot && !p.isLocal)) { setLocalSetupReady(true); socket.emit(\'setup_ready\'); } else { setIsSetupPhase(false); setStartSequence(1); } }} className="px-12 py-5 bg-green-600 hover:bg-green-500 text-white font-black text-3xl italic rounded">IR PARA A PISTA</button> )}
+            {localSetupReady ? ( <div className="px-12 py-5 bg-gray-800 text-gray-400 font-black text-2xl animate-pulse">A AGUARDAR ADVERSÁRIO...</div> ) : ( <button onClick={() => { if (players.some(p => !p.isBot && !p.isLocal)) { setLocalSetupReady(true); socket.emit('setup_ready'); } else { setIsSetupPhase(false); setStartSequence(1); } }} className="px-12 py-5 bg-green-600 hover:bg-green-500 text-white font-black text-3xl italic rounded">IR PARA A PISTA</button> )}
          </div>
       )}
       {fastLapPopup && !raceFinished && startSequence >= 4 && ( <div className="absolute bottom-8 right-8 z-50 flex flex-col items-end animate-pulse"><div className="bg-black/90 px-8 py-3 border-t-4" style={{borderColor: fastLapPopup.color}}><span className="text-xl font-bold uppercase text-white">NOVA VOLTA RÁPIDA!</span><div className="text-5xl font-black text-white">{fastLapPopup.time}</div></div><div className="px-12 py-2 text-black font-black uppercase text-2xl" style={{backgroundColor: fastLapPopup.color}}>{fastLapPopup.name}</div></div> )}
       {!isSetupPhase && !raceFinished && startSequence >= 4 && (
          <div className="absolute bottom-8 left-0 flex flex-col gap-2 z-10">
-            {players.filter(p => !p.isBot).map(p => ( <div key={p.id} className="bg-black/80 border-l-4 p-3 rounded-r-xl w-64 shadow-2xl flex flex-col" style={{borderColor: p.color}}><span className="text-white font-black text-xl italic uppercase">{p.driverName || \'P\'+p.id}</span><div className="flex justify-between"><div className="text-[10px] text-gray-500 font-bold uppercase">Tempo <span id={`hud-time-${p.id}`} className="text-yellow-400 font-mono text-base">00:00.00</span></div><div className="text-[10px] text-gray-500 font-bold uppercase">L<span id={`hud-lap-${p.id}`} className="text-white font-black text-base">1/{totalLaps}</span></div></div></div> ))}
+            {players.filter(p => !p.isBot).map(p => ( <div key={p.id} className="bg-black/80 border-l-4 p-3 rounded-r-xl w-64 shadow-2xl flex flex-col" style={{borderColor: p.color}}><span className="text-white font-black text-xl italic uppercase">{p.driverName || 'P'+p.id}</span><div className="flex justify-between"><div className="text-[10px] text-gray-500 font-bold uppercase">Tempo <span id={`hud-time-${p.id}`} className="text-yellow-400 font-mono text-base">00:00.00</span></div><div className="text-[10px] text-gray-500 font-bold uppercase">L<span id={`hud-lap-${p.id}`} className="text-white font-black text-base">1/{totalLaps}</span></div></div></div> ))}
+         </div>
+      )}
+
+      {!isSetupPhase && !raceFinished && startSequence >= 4 && (
+         <div className="absolute top-4 right-4 text-white text-[10px] sm:text-xs opacity-50 text-right space-y-1 font-bold tracking-widest uppercase z-10 pointer-events-none">
+            {players.filter(p => !p.isBot && p.isLocal).slice(0, 1).map(p => {
+               const c = p.controls || { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', camera: 'KeyC' };
+               return (
+                 <React.Fragment key="controls-hint">
+                    <p><span className="text-[#E10600] inline-block text-center w-5">{c.up?.replace('Key','')?.replace('Arrow','▲')}</span> ACELERAR</p>
+                    <p><span className="text-[#E10600] inline-block text-center w-5">{c.down?.replace('Key','')?.replace('Arrow','▼')}</span> TRAVAR</p>
+                    <p><span className="text-[#E10600] inline-block text-center w-5">{c.left?.replace('Key','')?.replace('Arrow','◀')}</span> VIRAR <span className="text-[#E10600] inline-block text-center w-5">{c.right?.replace('Key','')?.replace('Arrow','▶')}</span></p>
+                    <p><span className="text-yellow-500 inline-block text-center w-5">{c.camera?.replace('Key','')?.replace('Arrow','C')}</span> CÂMARA</p>
+                 </React.Fragment>
+               );
+            })}
          </div>
       )}
       {!isSetupPhase && !raceFinished && startSequence >= 4 && (
          <div className="absolute top-20 left-4 flex flex-col gap-1 z-10 w-48">
             {liveStandings.map((carId, idx) => {
                const p = players.find(x => x.id === carId); if (!p) return null;
-               return ( <div key={carId} className="flex items-center bg-black/80 rounded border-l-4" style={{borderColor: p.color}}><span className="w-8 text-center text-white font-black text-sm bg-gray-900 py-1">{idx + 1}</span><span className="flex-1 text-white font-bold text-xs pl-3 uppercase tracking-widest truncate">{p.driverName}{p.isBot ? \'*\' : \'\'}</span></div> );
+               return ( <div key={carId} className="flex items-center bg-black/80 rounded border-l-4" style={{borderColor: p.color}}><span className="w-8 text-center text-white font-black text-sm bg-gray-900 py-1">{idx + 1}</span><span className="flex-1 text-white font-bold text-xs pl-3 uppercase tracking-widest truncate">{p.driverName}{p.isBot ? '*' : ''}</span></div> );
             })}
          </div>
       )}
       {!isSetupPhase && !raceFinished && startSequence >= 4 && (
          <div className="absolute bottom-8 right-8 w-48 h-48 bg-black/60 border-2 border-gray-800 rounded-2xl p-4 z-10 overflow-hidden">
-            <svg viewBox={`${mapBounds.minX} ${mapBounds.minY} ${mapBounds.maxX - mapBounds.minX} ${mapBounds.maxY - mapBounds.minY}`} className="w-full h-full opacity-50"><polygon points={spline.map(pt => `${pt.x},${pt.y}`).join(\' \')} fill="none" stroke="#FFF" strokeWidth={(mapBounds.maxX-mapBounds.minX)*0.02} /></svg>
-            {players.map(p => ( <div key={`dot-${p.id}`} id={`minimap-dot-${p.id}`} className="absolute w-3 h-3 rounded-full border border-white z-20" style={{backgroundColor: p.color, left: \'50%\', top: \'50%\'}}></div> ))}
+            <svg viewBox={`${mapBounds.minX} ${mapBounds.minY} ${mapBounds.maxX - mapBounds.minX} ${mapBounds.maxY - mapBounds.minY}`} className="w-full h-full opacity-70" preserveAspectRatio="xMidYMid meet">
+               <polygon points={spline.map(pt => `${pt.x},${pt.y}`).join(' ')} fill="none" stroke="#FFF" strokeWidth={(mapBounds.maxX-mapBounds.minX)*0.015} strokeLinejoin="round" />
+               {players.map(p => ( <circle key={`dot-${p.id}`} id={`minimap-dot-${p.id}`} cx="0" cy="0" r={(mapBounds.maxX-mapBounds.minX)*0.025} fill={p.color} stroke="#FFF" strokeWidth={(mapBounds.maxX-mapBounds.minX)*0.008} className="transition-all duration-75 origin-center" /> ))}
+            </svg>
          </div>
       )}
-      {!raceFinished && ( <button onClick={() => onBackToMenu([], \'quit\')} className="fixed top-4 right-4 bg-red-600 text-white font-bold px-4 py-2 hover:bg-red-700 z-50 rounded-lg">DESISTIR</button> )}
+      {!raceFinished && ( <button onClick={() => onBackToMenu([], 'quit')} className="fixed top-4 right-4 bg-red-600 text-white font-bold px-4 py-2 hover:bg-red-700 z-50 rounded-lg">DESISTIR</button> )}
       {raceFinished && (() => {
         // ROBUST CLASSIFICATION: Priority 1: Finished by time. Priority 2: Unfinished by progression.
         const sorted = [...carsRef.current].sort((a,b) => {
@@ -490,8 +507,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
            return { 
              playerId: c.id, 
              position: i + 1, 
-             driverName: pDef?.driverName || (c.isBot ? \'BOT\' : \'P\'+c.id), 
-             teamName: pDef?.teamName || \'Independente\', 
+             driverName: pDef?.driverName || (c.isBot ? 'BOT' : 'P'+c.id), 
+             teamName: pDef?.teamName || 'Independente', 
              color: c.color, 
              color2: c.color2, 
              totalTimeMs: c.finishTime, 
@@ -500,7 +517,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
              totalChampionshipPoints: (championshipStandings[c.id] || 0) + (i < 10 ? F1_PTS[i] : 0) 
            };
         });
-        return ( <RaceResults results={currentRes} isHost={isHost} hasNextTrack={hasNextTrack} onNextTrack={() => onBackToMenu(currentRes, \'next\')} onFinishEvent={() => onBackToMenu(currentRes, \'finish\')} /> );
+        return ( <RaceResults results={currentRes} isHost={isHost} hasNextTrack={hasNextTrack} onNextTrack={() => onBackToMenu(currentRes, 'next')} onFinishEvent={() => onBackToMenu(currentRes, 'finish')} /> );
       })()}
     </div>
   );
