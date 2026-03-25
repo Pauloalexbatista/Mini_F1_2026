@@ -408,7 +408,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                        {lobbyState.find((p) => p.socketId === socket.id)?.isReady ? (
                           <div className="text-yellow-500 font-black text-xl italic animate-pulse tracking-widest text-center">A AGUARDAR AUTORIZAÇÃO DA DIREÇÃO DE CORRIDA...<br/><span className="text-xs uppercase text-gray-500 not-italic mt-2 block">Clica no botão "IR PARA A CORRIDA" quando o Host autorizar</span></div>
                        ) : (
-                          <button onClick={() => socket.emit('player_ready')} className="bg-green-600 text-white font-black uppercase tracking-widest px-16 py-5 rounded-xl hover:bg-green-500 transition-colors shadow-[0_0_30px_rgba(34,197,94,0.3)] text-xl">ESTOU PRONTO PARA CORRER</button>
+                          <button onClick={() => socket.emit('set_ready', true)} className="bg-green-600 text-white font-black uppercase tracking-widest px-16 py-5 rounded-xl hover:bg-green-500 transition-colors shadow-[0_0_30px_rgba(34,197,94,0.3)] text-xl">ESTOU PRONTO PARA CORRER</button>
                        )}
                     </div>
                   </div>
