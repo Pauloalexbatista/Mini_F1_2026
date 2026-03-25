@@ -415,7 +415,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
          
          // HOST SAFETY TIMEOUT
          if (isHost && !raceFinished) {
-            const anyoneFinished = carsRef.current.some(c => !c.isBot && c.finishTime !== null);
+            const anyoneFinished = carsRef.current.some(c => !c.isBot && (c.finishTime !== null || c.givenUp));
             if (anyoneFinished && raceGraceEndTimeRef.current === null) {
                 raceGraceEndTimeRef.current = now + 20000; // 20s grace since first finisher
             }
@@ -425,7 +425,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
             }
          }
 
-         if (humansFinished) {
+         if (isHost && humansFinished && !raceFinished) {
              if (allHumansFinishedTimeRef.current === null) allHumansFinishedTimeRef.current = now;
              else if (now - allHumansFinishedTimeRef.current > 5000) setRaceFinished(true);
          }
