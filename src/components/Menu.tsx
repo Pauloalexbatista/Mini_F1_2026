@@ -493,7 +493,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                 </div>
               )}
             </div>
-          )
+          )}
 
 {/* TEAMS CAROUSEL UI -> CHANGED TO GARAGE UI */}
         {activeTab === 'teams' && (
