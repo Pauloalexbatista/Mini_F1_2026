@@ -94,38 +94,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       return { minX: minX - w*0.1, maxX: maxX + w*0.1, minY: minY - h*0.1, maxY: maxY + h*0.1 };
   }, [spline]);
 
-  useEffect(() => {
-     if (isSetupPhase || raceFinished || startSequence < 4) return;
-     
-     const interval = setInterval(() => {
-         if (isHost) {
-             const sorted = [...carsRef.current].sort((a,b) => {
-                 if (a.finishTime !== null && b.finishTime !== null) return a.finishTime - b.finishTime;
-                 if (a.finishTime !== null) return -1;
-                 if (b.finishTime !== null) return 1;
-                 const scoreA = (a.laps * 1000000) + a.currentWaypoint;
-                 const scoreB = (b.laps * 1000000) + b.currentWaypoint;
-                 return scoreB - scoreA;
-             });
-             
-             const standingsData = sorted.map(c => ({
-                 id: c.id,
-                 bestLapMs: c.bestLapTime || null,
-                 isFastestLap: (c.bestLapTime !== null && c.bestLapTime === globalBestLapRef.current && globalBestLapRef.current !== Infinity)
-             }));
-             
-             let countdownRemaining = null;
-             if (raceGraceEndTimeRef.current !== null) {
-                 countdownRemaining = Math.max(0, Math.ceil((raceGraceEndTimeRef.current - Date.now()) / 1000));
-                 setRaceEndCountdown(countdownRemaining);
-             }
+  // Standings updated in physics loop now
 
-             socket.emit('host_live_standings', { standings: standingsData, countdown: countdownRemaining });
-             setLiveStandings(standingsData);
-         }
-     }, 500);
-     return () => clearInterval(interval);
-  }, [isHost, isSetupPhase, raceFinished, startSequence]);
 
   useEffect(() => {
     if (isHost) return;
@@ -402,14 +372,14 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           if (!isFinished) {
               if (speed_val_final > 100 && car.isSkidding) { skidMarksRef.current.push({ x: car.x, y: car.y, a: car.angle, w: 22 }); if (skidMarksRef.current.length > 3000) skidMarksRef.current.shift(); }
               if (closestIndex > car.currentWaypoint && closestIndex < car.currentWaypoint + 400) car.currentWaypoint = closestIndex;
-              if (closestIndex < 20 && car.currentWaypoint > spline.length * 0.8) {
+              if ((closestIndex < spline.length * 0.1 || closestIndex < 30) && car.currentWaypoint > spline.length * 0.7) {
                  car.laps++; car.currentWaypoint = 0;
                  if (car.laps > 0 && car.currentLapStartTime) {
                     const lapT = now - car.currentLapStartTime; car.lastLapTime = lapT; if (!car.bestLapTime || lapT < car.bestLapTime) car.bestLapTime = lapT;
                     if (lapT < globalBestLapRef.current) { globalBestLapRef.current = lapT; const pD = players.find(p => p.id === car.id); setFastLapPopup({ name: pD?.driverName || (car.isBot ? 'BOT' : 'P'+car.id), time: formatTime(lapT), color: car.color, isInitial: false }); setTimeout(() => setFastLapPopup(null), 4000); }
                  }
                  car.currentLapStartTime = now;
-                 if (car.laps >= totalLaps && totalLaps > 0 && car.finishTime === null) { 
+                 if (car.laps >= Number(totalLaps) && Number(totalLaps) > 0 && car.finishTime === null) { 
                     car.finishTime = now - startTimeRef.current; 
                     if (!car.isBot && !car.scorePosted) { 
                         car.scorePosted = true; 
@@ -427,7 +397,33 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
          const humansFinished = activeMans.length > 0 && activeMans.every(c => c.finishTime !== null || c.givenUp);
          
          // HOST SAFETY TIMEOUT
-         // LOCAL SAFETY TIMER: Starts for everyone to avoid lockouts if host transitions
+                   // HOST STANDINGS BROADCAST (Throttled 500ms)
+          const lastStandingsEmit = carsRef.current.lastStandingsEmit || 0;
+          if (isHost && now - lastStandingsEmit > 500) {
+              carsRef.current.lastStandingsEmit = now;
+              const sorted = [...carsRef.current].sort((a,b) => {
+                  if (a.finishTime !== null && b.finishTime !== null) return a.finishTime - b.finishTime;
+                  if (a.finishTime !== null) return -1;
+                  if (b.finishTime !== null) return 1;
+                  const scoreA = (a.laps * 1000000) + a.currentWaypoint;
+                  const scoreB = (b.laps * 1000000) + b.currentWaypoint;
+                  return scoreB - scoreA;
+              });
+              const standingsData = sorted.map(c => ({
+                  id: c.id,
+                  bestLapMs: c.bestLapTime || null,
+                  isFastestLap: (c.bestLapTime !== null && c.bestLapTime === globalBestLapRef.current && globalBestLapRef.current !== Infinity)
+              }));
+              let countdownRemaining = null;
+              if (raceGraceEndTimeRef.current !== null) {
+                  countdownRemaining = Math.max(0, Math.ceil((raceGraceEndTimeRef.current - Date.now()) / 1000));
+                  setRaceEndCountdown(countdownRemaining);
+              }
+              socket.emit('host_live_standings', { standings: standingsData, countdown: countdownRemaining });
+              setLiveStandings(standingsData);
+          }
+
+          // LOCAL SAFETY TIMER: Starts for everyone to avoid lockouts if host transitions
           if (!raceFinished) {
             const anyoneFinished = carsRef.current.some(c => !c.isBot && (c.finishTime !== null || c.givenUp));
             if (anyoneFinished && raceGraceEndTimeRef.current === null) {
