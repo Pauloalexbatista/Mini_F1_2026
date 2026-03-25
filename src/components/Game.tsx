@@ -223,7 +223,20 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
      return () => { socket.off('all_setup_ready', onAllSetupReady); };
   }, []);
 
-  useEffect(() => {
+     useEffect(() => {
+      const onLobbyState = (state: any[]) => {
+         carsRef.current.forEach(car => {
+            if (!car.isBot && !car.isLocal) {
+               const stillInRoom = state.some(p => String(p.socketId) === String(car.id));
+               if (!stillInRoom && car.finishTime === null) car.givenUp = true;
+            }
+         });
+      };
+      socket.on('lobby_state', onLobbyState);
+      return () => { socket.off('lobby_state', onLobbyState); };
+   }, []);
+
+   useEffect(() => {
      if (isSetupPhase) return;
      const onRemoteTick = (data: any) => {
         const car = carsRef.current.find(c => c.id === data.id);
@@ -414,7 +427,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
          const humansFinished = activeMans.length > 0 && activeMans.every(c => c.finishTime !== null || c.givenUp);
          
          // HOST SAFETY TIMEOUT
-         if (isHost && !raceFinished) {
+         // LOCAL SAFETY TIMER: Starts for everyone to avoid lockouts if host transitions
+          if (!raceFinished) {
             const anyoneFinished = carsRef.current.some(c => !c.isBot && (c.finishTime !== null || c.givenUp));
             if (anyoneFinished && raceGraceEndTimeRef.current === null) {
                 raceGraceEndTimeRef.current = now + 20000; // 20s grace since first finisher
@@ -548,7 +562,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           </div>
        )}
 
-       {!isSetupPhase && !raceFinished && startSequence >= 4 && (
+       {!isSetupPhase && !finalClassification && startSequence >= 4 && (
          <div className="absolute bottom-12 left-8 flex flex-col gap-2 z-10">
             {players.filter(p => !p.isBot && p.isLocal).map(p => ( 
                <div key={p.id} className="bg-black/80 border-l-4 p-4 rounded-r-xl w-72 shadow-2xl flex flex-col border-white/20" style={{borderLeftColor: p.color}}>
@@ -571,29 +585,36 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
          </div>
       )}
 
-      {!isSetupPhase && !raceFinished && startSequence >= 4 && (
-         <div className="absolute top-4 right-4 text-white text-[10px] sm:text-xs opacity-50 text-right space-y-1 font-bold tracking-widest uppercase z-10 pointer-events-none">
+      {!isSetupPhase && !finalClassification && startSequence >= 4 && (
+         <div className="absolute top-16 right-4 bg-black/60 backdrop-blur-md p-3 rounded-xl border border-white/20 shadow-2xl z-10 pointer-events-none w-48 transition-all">
              {players.filter(p => !p.isBot && p.isLocal).slice(0, 1).map(p => {
-                const c = p.controls || { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', camera: 'KeyC' };
+                const ctrls = p.controls || {};
+                const c = {
+                    up: (ctrls.up || 'ArrowUp').replace('Key','').replace('Arrow','▲'),
+                    down: (ctrls.down || 'ArrowDown').replace('Key','').replace('Arrow','▼'),
+                    left: (ctrls.left || 'ArrowLeft').replace('Key','').replace('Arrow','◀'),
+                    right: (ctrls.right || 'ArrowRight').replace('Key','').replace('Arrow','▶'),
+                    camera: (ctrls.camera || 'KeyC').replace('Key','').replace('Arrow','C')
+                };
                 return (
                   <div key="controls-hint" className="grid grid-cols-2 gap-x-2 gap-y-3">
                      <div className="flex items-center gap-2">
-                        <kbd className="w-8 h-8 rounded bg-white text-black font-black flex items-center justify-center text-sm shadow-[0_2px_0_#ccc] uppercase">{c.up?.replace('Key','')?.replace('Arrow','▲')}</kbd>
+                        <kbd className="w-8 h-8 rounded bg-white text-black font-black flex items-center justify-center text-sm shadow-[0_2px_0_#ccc] uppercase">{c.up}</kbd>
                         <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">GAS</span>
                      </div>
                      <div className="flex items-center gap-2">
-                        <kbd className="w-8 h-8 rounded bg-[#E10600] text-white font-black flex items-center justify-center text-sm shadow-[0_2px_0_#900] uppercase">{c.down?.replace('Key','')?.replace('Arrow','▼')}</kbd>
+                        <kbd className="w-8 h-8 rounded bg-[#E10600] text-white font-black flex items-center justify-center text-sm shadow-[0_2px_0_#900] uppercase">{c.down}</kbd>
                         <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">STOP</span>
                      </div>
                      <div className="flex items-center gap-2">
                         <div className="flex bg-white/10 rounded p-0.5 border border-white/10 gap-0.5">
-                           <kbd className="w-6 h-7 rounded bg-white text-black font-black flex items-center justify-center text-[10px] uppercase">{c.left?.replace('Key','')?.replace('Arrow','◀')}</kbd>
-                           <kbd className="w-6 h-7 rounded bg-white text-black font-black flex items-center justify-center text-[10px] uppercase">{c.right?.replace('Key','')?.replace('Arrow','▶')}</kbd>
+                           <kbd className="w-6 h-7 rounded bg-white text-black font-black flex items-center justify-center text-[10px] uppercase">{c.left}</kbd>
+                           <kbd className="w-6 h-7 rounded bg-white text-black font-black flex items-center justify-center text-[10px] uppercase">{c.right}</kbd>
                         </div>
                         <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">TURN</span>
                      </div>
                      <div className="flex items-center gap-2">
-                        <kbd className="w-8 h-8 rounded bg-yellow-400 text-black font-black flex items-center justify-center text-sm shadow-[0_2px_0_#b80] uppercase">{c.camera?.replace('Key','')?.replace('Arrow', 'C')}</kbd>
+                        <kbd className="w-8 h-8 rounded bg-yellow-400 text-black font-black flex items-center justify-center text-sm shadow-[0_2px_0_#b80] uppercase">{c.camera}</kbd>
                         <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">CAM</span>
                      </div>
                   </div>
@@ -601,7 +622,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
              })}
          </div>
       )}
-      {!isSetupPhase && !raceFinished && startSequence >= 4 && (
+      {!isSetupPhase && !finalClassification && startSequence >= 4 && (
          <div className="absolute bottom-28 right-4 flex flex-col gap-1 z-10 w-64">
             {liveStandings.map((entry, idx) => {
                const p = players.find(x => x.id === entry.id); if (!p) return null;
