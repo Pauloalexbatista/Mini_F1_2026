@@ -33,6 +33,20 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   const [startSequence, setStartSequence] = useState(isSetupPhase ? 0 : 1); 
   const [, setForceRender] = useState(0);
   const [cameraModeUI, setCameraModeUI] = useState<'CENTRAL' | 'DYNAMIC' | 'QUADRANTS'>('CENTRAL');
+
+  useEffect(() => {
+      audio.init();
+      return () => audio.stopAllEngines();
+  }, []);
+
+  useEffect(() => {
+      if (raceFinished) {
+          audio.stopAllEngines();
+      }
+      return () => audio.stopAllEngines();
+  }, [raceFinished]);
+
+  // Track constraints caching
   const [localSetupReady, setLocalSetupReady] = useState(false); // true after clicking IR PARA A PISTA
   const globalBestLapRef = useRef<number>(Infinity);
   const [fastLapPopup, setFastLapPopup] = useState<{name: string, time: string, color: string, isInitial: boolean} | null>(null);
