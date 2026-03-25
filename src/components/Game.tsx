@@ -55,13 +55,15 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   const spline = React.useMemo(() => rawTrack.nodes, [rawTrack]);
 
   const mapBounds = React.useMemo(() => {
-      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-      spline.forEach(([x,y]) => {
-         if (x < minX) minX = x;
-         if (x > maxX) maxX = x;
-         if (y < minY) minY = y;
-         if (y > maxY) maxY = y;
-      });
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      if (spline) {
+        spline.forEach(({x, y}) => {
+           if (x < minX) minX = x;
+           if (x > maxX) maxX = x;
+           if (y < minY) minY = y;
+           if (y > maxY) maxY = y;
+        });
+      }
       const w = maxX - minX;
       const h = maxY - minY;
       return { minX: minX - w*0.1, maxX: maxX + w*0.1, minY: minY - h*0.1, maxY: maxY + h*0.1 };
