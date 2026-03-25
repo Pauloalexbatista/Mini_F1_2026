@@ -58,7 +58,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   const [localSetupReady, setLocalSetupReady] = useState(false);
   const globalBestLapRef = useRef<number>(Infinity);
   const [fastLapPopup, setFastLapPopup] = useState<{name: string, time: string, color: string, isInitial: boolean} | null>(null);
-  const [liveStandings, setLiveStandings] = useState<number[]>([]);
+  const [liveStandings, setLiveStandings] = useState<{id: number, bestLapMs: number | null, isFastestLap: boolean}[]>([]);
+  const raceGraceEndTimeRef = useRef<number | null>(null);
   
   const carsRef = useRef<CarPhysics[]>([]);
   const keysRef = useRef<{ [key: string]: boolean }>({});
@@ -94,22 +95,39 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
 
   useEffect(() => {
      if (isSetupPhase || raceFinished || startSequence < 4) return;
+     
      const interval = setInterval(() => {
-         const sorted = [...carsRef.current].sort((a,b) => {
-             // Priority 1: Finished cars by finishTime
-             if (a.finishTime !== null && b.finishTime !== null) return a.finishTime - b.finishTime;
-             if (a.finishTime !== null) return -1;
-             if (b.finishTime !== null) return 1;
+         if (isHost) {
+             const sorted = [...carsRef.current].sort((a,b) => {
+                 if (a.finishTime !== null && b.finishTime !== null) return a.finishTime - b.finishTime;
+                 if (a.finishTime !== null) return -1;
+                 if (b.finishTime !== null) return 1;
+                 const scoreA = (a.laps * 1000000) + a.currentWaypoint;
+                 const scoreB = (b.laps * 1000000) + b.currentWaypoint;
+                 return scoreB - scoreA;
+             });
              
-             // Priority 2: Unfinished cars by progression
-             const scoreA = (a.laps * 1000000) + a.currentWaypoint;
-             const scoreB = (b.laps * 1000000) + b.currentWaypoint;
-             return scoreB - scoreA;
-         });
-         setLiveStandings(sorted.map(c => c.id));
-     }, 300); // Faster interval for HUD responsiveness
+             const standingsData = sorted.map(c => ({
+                 id: c.id,
+                 bestLapMs: c.bestLapTime || null,
+                 isFastestLap: (c.bestLapTime !== null && c.bestLapTime === globalBestLapRef.current && globalBestLapRef.current !== Infinity)
+             }));
+             
+             socket.emit('host_live_standings', standingsData);
+             setLiveStandings(standingsData);
+         }
+     }, 500);
      return () => clearInterval(interval);
-  }, [isSetupPhase, raceFinished, startSequence]);
+  }, [isHost, isSetupPhase, raceFinished, startSequence]);
+
+  useEffect(() => {
+    if (isHost) return;
+    const onLiveStandings = (data: any[]) => {
+        setLiveStandings(data);
+    };
+    socket.on('live_standings', onLiveStandings);
+    return () => { socket.off('live_standings', onLiveStandings); };
+  }, [isHost]);
 
   useEffect(() => {
     audio.init();
@@ -212,7 +230,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
            if (data.laps !== undefined) car.laps = data.laps;
            if (data.ft !== undefined) car.finishTime = data.ft;
            if (data.cw !== undefined) car.currentWaypoint = data.cw;
-        }
+           if (data.bl !== undefined) car.bestLapTime = data.bl;
+         }
      };
      socket.on('remote_tick', onRemoteTick);
      return () => { socket.off('remote_tick', onRemoteTick); };
@@ -340,11 +359,11 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           if (car.isLocal || car.isBot) {
               updateCarPhysics(car, dt, surface);
               if (car.isLocal && socket.connected && now - lastEmitRef.current > 50) {
-                 // SYNC: Added laps, finishTime, and currentWaypoint to telemetry
-                 socket.emit('player_tick', { id: car.id, x: car.x, y: car.y, a: car.angle, vx: car.vx, vy: car.vy, s: car.steer, b: car.brake, t: car.throttle, laps: car.laps, ft: car.finishTime, cw: car.currentWaypoint });
-                 lastEmitRef.current = now;
-              }
-          }
+                  // SYNC: Added laps, finishTime, currentWaypoint, and bestLapTime to telemetry
+                  socket.emit('player_tick', { id: car.id, x: car.x, y: car.y, a: car.angle, vx: car.vx, vy: car.vy, s: car.steer, b: car.brake, t: car.throttle, laps: car.laps, ft: car.finishTime, cw: car.currentWaypoint, bl: car.bestLapTime });
+                  lastEmitRef.current = now;
+               }
+           }
           audio.updateEngine(car.id, speed_val/1200, car.throttle, car.isBot);
           if (speed_val > 100 && car.isSkidding) { skidMarksRef.current.push({ x: car.x, y: car.y, a: car.angle, w: 22 }); if (skidMarksRef.current.length > 3000) skidMarksRef.current.shift(); }
           if (closestIndex > car.currentWaypoint && closestIndex < car.currentWaypoint + 400) car.currentWaypoint = closestIndex;
@@ -359,12 +378,27 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           }
         });
 
-        if (carsRef.current.some(c => c.finishTime !== null) && firstFinishTimeRef.current === null) { firstFinishTimeRef.current = now; audio.playVictory(); }
-        const activeMans = carsRef.current.filter(c => !c.isBot);
-        if (activeMans.length > 0 && activeMans.every(c => c.finishTime !== null || c.givenUp)) {
-            if (allHumansFinishedTimeRef.current === null) allHumansFinishedTimeRef.current = now;
-            else if (now - allHumansFinishedTimeRef.current > 5000) setRaceFinished(true);
-        }
+         if (carsRef.current.some(c => c.finishTime !== null) && firstFinishTimeRef.current === null) { firstFinishTimeRef.current = now; audio.playVictory(); }
+         
+         const activeMans = carsRef.current.filter(c => !c.isBot);
+         const humansFinished = activeMans.length > 0 && activeMans.every(c => c.finishTime !== null || c.givenUp);
+         
+         // HOST SAFETY TIMEOUT
+         if (isHost && !raceFinished) {
+            const anyoneFinished = carsRef.current.some(c => !c.isBot && c.finishTime !== null);
+            if (anyoneFinished && raceGraceEndTimeRef.current === null) {
+                raceGraceEndTimeRef.current = now + 20000; // 20s grace since first finisher
+            }
+            if (raceGraceEndTimeRef.current !== null && now > raceGraceEndTimeRef.current) {
+                console.log("SAFETY TIMEOUT - FORCING END");
+                setRaceFinished(true);
+            }
+         }
+
+         if (humansFinished) {
+             if (allHumansFinishedTimeRef.current === null) allHumansFinishedTimeRef.current = now;
+             else if (now - allHumansFinishedTimeRef.current > 5000) setRaceFinished(true);
+         }
        }
       } catch (e: any) { console.error("F1 PHYSICS ENGINE CRASH:", e); }
 
@@ -496,10 +530,21 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
          </div>
       )}
       {!isSetupPhase && !raceFinished && startSequence >= 4 && (
-         <div className="absolute top-20 left-4 flex flex-col gap-1 z-10 w-48">
-            {liveStandings.map((carId, idx) => {
-               const p = players.find(x => x.id === carId); if (!p) return null;
-               return ( <div key={carId} className="flex items-center bg-black/80 rounded border-l-4" style={{borderColor: p.color}}><span className="w-8 text-center text-white font-black text-sm bg-gray-900 py-1">{idx + 1}</span><span className="flex-1 text-white font-bold text-xs pl-3 uppercase tracking-widest truncate">{p.driverName}{p.isBot ? '*' : ''}</span></div> );
+         <div className="absolute bottom-28 right-4 flex flex-col gap-1 z-10 w-64">
+            {liveStandings.map((entry, idx) => {
+               const p = players.find(x => x.id === entry.id); if (!p) return null;
+               return (
+                 <div key={entry.id} className="flex items-center bg-black/80 rounded-l border-l-4 overflow-hidden shadow-lg h-8" style={{borderColor: p.color}}>
+                    <span className="w-6 text-center text-white font-black text-[10px] bg-gray-900 h-full flex items-center justify-center">{idx + 1}</span>
+                    <span className="flex-1 text-white font-bold text-[11px] pl-3 uppercase tracking-tighter truncate italic">{p.driverName}</span>
+                    <div className="flex items-center gap-2 pr-3 h-full">
+                       {entry.isFastestLap && <span className="text-purple-400 animate-pulse text-xs">⭐</span>}
+                       <span className={`font-mono text-[9px] ${entry.isFastestLap ? 'text-purple-400 font-bold' : 'text-gray-400'}`}>
+                          {entry.bestLapMs ? formatTime(entry.bestLapMs) : '--:--.--'}
+                       </span>
+                    </div>
+                 </div>
+               );
             })}
          </div>
       )}

@@ -403,6 +403,13 @@ io.on('connection', (socket) => {
       }
   });
 
+  socket.on('host_live_standings', (data) => {
+      const p = onlinePlayers.find(p => p.socketId === socket.id);
+      if (p && p.eventId && p.isHost) {
+          socket.to(p.eventId).emit('live_standings', data);
+      }
+  });
+
   // Sair de um evento e voltar à box
   socket.on('leave_event', async () => {
       const p = onlinePlayers.find(x => x.socketId === socket.id);
