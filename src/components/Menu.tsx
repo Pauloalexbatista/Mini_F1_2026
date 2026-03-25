@@ -427,7 +427,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                            setShowEventCreator(false);
                            setEventName('');
                            fetchEvents();
-                           if (onJoinEvent) onJoinEvent(eid, selectedTracks, totalLaps);
+                           if (onJoinEvent) onJoinEvent(eid, trackEntries);
                          }}
                          disabled={!selectedTracks.length || !eventName.trim()}
                          className="flex-1 bg-[#E10600] text-white font-black uppercase tracking-widest px-6 py-3 rounded hover:bg-white hover:text-[#E10600] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -454,7 +454,17 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                        ) : (
                          <div className="flex flex-col gap-3">
                            {openEvents.map(ev => {
-                             const evTracks: string[] = JSON.parse(ev.tracks_json || '[]');
+                             let evTracks: {id: string, laps: number}[] = [];
+                             try {
+                               const parsed = JSON.parse(ev.tracks_json || '[]');
+                               if (Array.isArray(parsed) && parsed.length > 0) {
+                                   if (typeof parsed[0] === 'string') {
+                                       evTracks = parsed.map((id: string) => ({id, laps: ev.laps || 3}));
+                                   } else {
+                                       evTracks = parsed.filter((t: any) => t && typeof t.id === 'string');
+                                   }
+                               }
+                             } catch (e) { evTracks = []; }
                              const joinedIds = lobbyState.map((p:any) => p.userId);
                              return (
                                <div key={ev.id} className="bg-black/60 border border-gray-700 hover:border-[#E10600] rounded-lg p-4 flex justify-between items-center transition-colors group">
@@ -463,7 +473,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                                    <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{ev.host_name} · {evTracks.length} pista{evTracks.length!==1?'s':''} · {ev.laps} volta{ev.laps!==1?'s':''}</div>
                                  </div>
                                  <button
-                                   onClick={() => onJoinEvent && onJoinEvent(ev.id, evTracks, ev.laps)}
+                                   onClick={() => onJoinEvent && onJoinEvent(ev.id, evTracks)}
                                    className="bg-[#E10600] text-white font-black uppercase tracking-widest text-[10px] px-4 py-2 rounded hover:bg-white hover:text-[#E10600] transition-colors"
                                  >JUNTAR</button>
                                </div>
@@ -472,7 +482,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                          </div>
                        )}
                        <button
-                         onClick={() => setShowEventCreator(true)}
+                         onClick={openCreator}
                          className="mt-6 w-full border-2 border-dashed border-gray-700 hover:border-[#E10600] text-gray-500 hover:text-white font-black uppercase tracking-widest py-4 rounded-xl transition-colors flex items-center justify-center gap-2"
                        >
                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>

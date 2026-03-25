@@ -6,19 +6,23 @@ import { updateCarPhysics, CarPhysics } from '../physics';
 import { drawTrack, drawEnvironments, drawF1Car, drawBridges3D } from '../renderer';
 import { TrackPreview } from './TrackPreview';
 import { socket } from '../socket';
+import { RaceResults, RaceResultEntry } from './RaceResults';
 
 interface GameProps {
   key?: React.Key;
   players: PlayerConfig[];
   track: TrackDef;
   totalLaps: number;
-  onBackToMenu: (results?: { playerId: number, position: number, driverName: string }[]) => void;
+  onBackToMenu: (results?: any[], action?: 'next' | 'finish' | 'quit') => void;
+  championshipStandings?: Record<number, number>;
+  isHost?: boolean;
+  hasNextTrack?: boolean;
 }
 
 let GAME_WIDTH = 1280;
 let GAME_HEIGHT = 720;
 
-export default function Game({ players, track, totalLaps, onBackToMenu }: GameProps) {
+export default function Game({ players, track, totalLaps, onBackToMenu, championshipStandings = {}, isHost = true, hasNextTrack = false }: GameProps) {
   const [isSetupPhase, setIsSetupPhase] = useState(true);
   const [playerSetups, setPlayerSetups] = useState<Record<number, number>>({});
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -32,6 +36,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
   const [localSetupReady, setLocalSetupReady] = useState(false); // true after clicking IR PARA A PISTA
   const globalBestLapRef = useRef<number>(Infinity);
   const [fastLapPopup, setFastLapPopup] = useState<{name: string, time: string, color: string, isInitial: boolean} | null>(null);
+  const [liveStandings, setLiveStandings] = useState<number[]>([]);
   
   const carsRef = useRef<CarPhysics[]>([]);
   const keysRef = useRef<{ [key: string]: boolean }>({});
@@ -48,6 +53,32 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
   
   const rawTrack = track;
   const spline = React.useMemo(() => rawTrack.nodes, [rawTrack]);
+
+  const mapBounds = React.useMemo(() => {
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      spline.forEach(([x,y]) => {
+         if (x < minX) minX = x;
+         if (x > maxX) maxX = x;
+         if (y < minY) minY = y;
+         if (y > maxY) maxY = y;
+      });
+      const w = maxX - minX;
+      const h = maxY - minY;
+      return { minX: minX - w*0.1, maxX: maxX + w*0.1, minY: minY - h*0.1, maxY: maxY + h*0.1 };
+  }, [spline]);
+
+  useEffect(() => {
+     if (isSetupPhase || raceFinished || startSequence < 4) return;
+     const interval = setInterval(() => {
+         const sorted = [...carsRef.current].sort((a,b) => {
+             const scoreA = (a.laps * 100000) + a.currentWaypoint;
+             const scoreB = (b.laps * 100000) + b.currentWaypoint;
+             return scoreB - scoreA;
+         });
+         setLiveStandings(sorted.map(c => c.id));
+     }, 500);
+     return () => clearInterval(interval);
+  }, [isSetupPhase, raceFinished, startSequence]);
 
   // Init cars
   useEffect(() => {
@@ -1027,6 +1058,18 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
             lapEl.innerText = `${Math.max(1, car.laps + 1)}/${totalLaps}`;
          }
       });
+      
+      const mapW = mapBounds.maxX - mapBounds.minX;
+      const mapH = mapBounds.maxY - mapBounds.minY;
+      carsRef.current.forEach(c => {
+          const dot = document.getElementById(`minimap-dot-${c.id}`);
+          if (dot) {
+              const px = ((c.x - mapBounds.minX) / mapW) * 100;
+              const py = ((c.y - mapBounds.minY) / mapH) * 100;
+              dot.style.left = `${px}%`;
+              dot.style.top = `${py}%`;
+          }
+      });
 
       animationFrameId = requestAnimationFrame(update);
     };
@@ -1267,6 +1310,37 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
          </div>
       )}
 
+      {/* Live TV Standings HUD */}
+      {!isSetupPhase && !raceFinished && startSequence >= 4 && (
+         <div className="absolute top-20 left-4 flex flex-col gap-1 z-10 w-48">
+            {liveStandings.map((carId, idx) => {
+               const p = players.find(x => x.id === carId);
+               if (!p) return null;
+               return (
+                  <div key={carId} className="flex items-center bg-black/80 backdrop-blur-md rounded border-l-4 overflow-hidden shadow-md transition-all duration-300" style={{borderColor: p.color}}>
+                     <span className="w-8 text-center text-white font-black text-sm bg-gray-900 py-1 border-r border-gray-800">{idx + 1}</span>
+                     <span className="flex-1 text-white font-bold text-xs pl-3 uppercase tracking-widest truncate">{p.driverName || 'BOT'}{p.isBot ? '*' : ''}</span>
+                  </div>
+               );
+            })}
+         </div>
+      )}
+
+      {/* Track Minimap HUD */}
+      {!isSetupPhase && !raceFinished && startSequence >= 4 && (
+         <div className="absolute bottom-8 right-8 w-48 h-48 bg-black/60 shadow-[0_0_30px_rgba(0,0,0,0.8)] backdrop-blur-md border-2 border-gray-800 rounded-2xl p-4 z-10 overflow-hidden">
+            <svg viewBox={`${mapBounds.minX} ${mapBounds.minY} ${mapBounds.maxX - mapBounds.minX} ${mapBounds.maxY - mapBounds.minY}`} className="w-full h-full opacity-50 drop-shadow-lg">
+               <polygon points={spline.map(pt => `${pt[0]},${pt[1]}`).join(' ')} fill="none" stroke="#FFFFFF" strokeWidth={(mapBounds.maxX - mapBounds.minX) * 0.02} strokeLinejoin="round" />
+               {rawTrack.pitNodes && rawTrack.pitNodes.length > 0 && (
+                  <polyline points={rawTrack.pitNodes.map(pt => `${pt[0]},${pt[1]}`).join(' ')} fill="none" stroke="#AAAAAA" strokeWidth={(mapBounds.maxX - mapBounds.minX) * 0.015} strokeLinejoin="round" strokeDasharray="5,5" />
+               )}
+            </svg>
+            {players.map(p => (
+               <div key={`dot-${p.id}`} id={`minimap-dot-${p.id}`} className="absolute w-3 h-3 rounded-full transform -translate-x-1.5 -translate-y-1.5 shadow-[0_0_8px_rgba(0,0,0,1)] transition-all duration-75 z-20" style={{backgroundColor: p.color, border: '1px solid white', left: '50%', top: '50%'}}></div>
+            ))}
+         </div>
+      )}
+
       {/* HUD Control Hints List */}
       {!isSetupPhase && !raceFinished && startSequence >= 4 && (() => {
          const p = players.find(player => !player.isBot);
@@ -1302,76 +1376,69 @@ export default function Game({ players, track, totalLaps, onBackToMenu }: GamePr
       })()}
       
       {!raceFinished && (
-        <button onClick={onBackToMenu} className="fixed top-4 right-4 bg-red-600 text-white font-bold px-4 py-2 hover:bg-red-700 z-50 rounded-lg shadow-lg text-sm tracking-wider uppercase">
+        <button onClick={() => onBackToMenu([], 'quit')} className="fixed top-4 right-4 bg-red-600 text-white font-bold px-4 py-2 hover:bg-red-700 z-50 rounded-lg shadow-lg text-sm tracking-wider uppercase">
           DESISTIR
         </button>
       )}
       
       {raceFinished && (() => {
-        const sortedCars = [...carsRef.current].sort((a,b) => (a.finishTime || Infinity) - (b.finishTime || Infinity));
+        const finishedCars = carsRef.current.filter(c => c.finishTime && c.finishTime !== Infinity);
+        finishedCars.sort((a,b) => a.finishTime! - b.finishTime!);
+
+        const unfinishedCars = carsRef.current.filter(c => !c.finishTime || c.finishTime === Infinity);
+        unfinishedCars.sort((a,b) => {
+             const scoreA = (a.laps * 100000) + a.currentWaypoint;
+             const scoreB = (b.laps * 100000) + b.currentWaypoint;
+             return scoreB - scoreA;
+        });
+
+        const sortedCars = [...finishedCars, ...unfinishedCars];
         const F1_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
         
         let fastestLapCarId = -1;
         let fastestLapTime = Infinity;
         sortedCars.forEach(c => {
-           if (c.finishTime && c.finishTime !== Infinity && c.bestLapTime && c.bestLapTime > 0 && c.bestLapTime < fastestLapTime) {
+           if (c.bestLapTime && c.bestLapTime > 0 && c.bestLapTime < fastestLapTime) {
                fastestLapTime = c.bestLapTime;
                fastestLapCarId = c.id;
            }
         });
 
-        return (
-          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
-            <h1 className="text-5xl mb-8 text-white font-black italic">CLASSIFICAÇÃO</h1>
-            <div className="bg-[#15151e] border-l-4 border-[#E10600] p-8 mb-8 w-full max-w-3xl">
-              <div className="flex justify-between mb-4 text-[10px] text-gray-500 font-bold uppercase tracking-widest border-b border-gray-800 pb-2">
-                 <span>POSIÇÃO / PILOTO</span>
-                 <div className="flex space-x-12 w-1/3 justify-end text-right pr-4">
-                    <span>TEMPO</span>
-                    <span>PONTOS</span>
-                 </div>
-              </div>
-              {sortedCars.map((c, i) => {
-                const pDetails = players.find(p => p.id === c.id);
-                const name = pDetails?.driverName || (c.isBot ? 'BOT AI' : `P${c.id}`);
-                const isFinished = c.finishTime && c.finishTime !== Infinity;
-                const basePoints = (i < 10 && isFinished) ? F1_POINTS[i] : 0;
-                const isFastestLap = (c.id === fastestLapCarId);
-                const extraPoint = (isFastestLap && isFinished) ? 1 : 0;
-                const totalPoints = basePoints + extraPoint;
+        const compiledResults: RaceResultEntry[] = sortedCars.map((c, i) => {
+           const pDetails = players.find(p => p.id === c.id);
+           const name = pDetails?.driverName || (c.isBot ? 'BOT AI' : `P${c.id}`);
+           const isFinished = c.finishTime && c.finishTime !== Infinity;
+           
+           // Assign points even if DNF! (Fair distribution of surviving bots based on their ordered rank)
+           const basePoints = (i < 10) ? F1_POINTS[i] : 0;
+           
+           const isFastestLap = (c.id === fastestLapCarId);
+           const extraPoint = (isFastestLap && i < 10) ? 1 : 0; // Top 10 gets FL point
+           const totalPoints = basePoints + extraPoint;
+           const previousChampionshipPoints = championshipStandings[c.id] || 0;
 
-                return (
-                  <div key={c.id} className="flex justify-between mb-2 text-xl font-black uppercase items-center" style={{color: c.color}}>
-                    <span className="flex-1 flex items-center">
-                       {i+1}º - {name}
-                       {isFastestLap && isFinished && <span className="ml-3 text-[10px] bg-purple-600 text-white px-2 py-0.5 rounded-full" title="Volta Mais Rápida (+1 Pt)">FL</span>}
-                    </span>
-                    <div className="flex space-x-12 w-1/3 justify-end text-right items-center pr-4">
-                       <span className="font-mono text-sm tracking-wider w-24 text-right">{isFinished ? formatTime(c.finishTime!) : 'DNF'}</span>
-                       <span className="font-mono text-lg w-12 text-center bg-white/10 rounded pt-1 pb-1">{isFinished ? totalPoints : 0}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            
-            <button 
-               onClick={() => {
-                  const results = sortedCars.map((c, idx) => {
-                     const pDetails = players.find(p => p.id === c.id);
-                     return {
-                        playerId: c.id,
-                        position: idx + 1,
-                        driverName: pDetails?.driverName || (c.isBot ? 'BOT AI' : `P${c.id}`)
-                     };
-                  });
-                  onBackToMenu(results);
-               }} 
-               className="px-8 py-4 bg-white text-black font-bold uppercase tracking-widest rounded transition hover:bg-gray-300"
-            >
-               CONTINUAR
-            </button>
-          </div>
+           return {
+              playerId: c.id,
+              position: i + 1,
+              driverName: name,
+              teamName: pDetails?.teamName || 'Equipa Independente',
+              color: c.color,
+              color2: c.color2,
+              totalTimeMs: isFinished ? c.finishTime! : null,
+              bestLapMs: (c.bestLapTime && c.bestLapTime !== Infinity) ? c.bestLapTime : null,
+              pointsEarned: totalPoints,
+              totalChampionshipPoints: previousChampionshipPoints + totalPoints
+           };
+        });
+
+        return (
+           <RaceResults 
+              results={compiledResults}
+              isHost={isHost}
+              hasNextTrack={hasNextTrack}
+              onNextTrack={() => onBackToMenu(compiledResults, 'next')}
+              onFinishEvent={() => onBackToMenu(compiledResults, 'finish')}
+           />
         );
       })()}
     </div>

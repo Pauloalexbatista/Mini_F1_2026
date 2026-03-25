@@ -170,16 +170,22 @@ export default function App() {
             }
         };
 
+        const onChampionshipAdvanced = () => {
+             setCurrentChampionshipRaceIndex(prev => prev + 1);
+        };
+
         socket.on('global_roster', onGlobalRoster);
         socket.on('lobby_state', onLobbyState);
         socket.on('trigger_refresh_events', onTriggerRefresh);
         socket.on('race_started', onStartRace);
+        socket.on('championship_advanced', onChampionshipAdvanced);
 
         return () => {
             socket.off('global_roster', onGlobalRoster);
             socket.off('lobby_state', onLobbyState);
             socket.off('trigger_refresh_events', onTriggerRefresh);
             socket.off('race_started', onStartRace);
+            socket.off('championship_advanced', onChampionshipAdvanced);
             socket.disconnect();
         };
      }
@@ -221,27 +227,32 @@ export default function App() {
     setLobbyState([]);
   };
 
-  const handleBackToMenu = (results?: any[]) => {
-      if (results && results.length > 0) {
-          const pointsSystem = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+  const handleBackToMenu = (results?: any[], action: 'next' | 'finish' | 'quit' = 'quit') => {
+      const validResults = Array.isArray(results) ? results : [];
+
+      if (validResults.length > 0) {
+          // Os pontos já vêm acumulados do Game.tsx no formato totalChampionshipPoints
           const newStandings = { ...championshipStandings };
-          results.forEach((r, i) => {
-              const points = pointsSystem[i] || 0;
-              newStandings[r.playerId] = (newStandings[r.playerId] || 0) + points;
+          validResults.forEach(r => {
+              newStandings[r.playerId] = r.totalChampionshipPoints;
           });
           setChampionshipStandings(newStandings);
 
-          if (currentChampionshipRaceIndex + 1 < selectedTracks.length) {
-              setCurrentChampionshipRaceIndex(prev => prev + 1);
+          if (action === 'next' && currentChampionshipRaceIndex + 1 < selectedTracks.length) {
+              if (activeEventId) {
+                  if (lobbyState.find(p => p.socketId === socket.id)?.isHost) {
+                     socket.emit('advance_championship');
+                  }
+              } else {
+                  setCurrentChampionshipRaceIndex(prev => prev + 1);
+              }
               return; // Avança logo para a pista seguinte sem sair
-          } else {
-              setCurrentChampionshipRaceIndex(0);
-              setAppState('menu');
           }
-      } else {
-          setAppState('menu');
-          setCurrentChampionshipRaceIndex(0);
       }
+
+      setAppState('menu');
+      setCurrentChampionshipRaceIndex(0);
+      setChampionshipStandings({});
   };
 
   const handleTestTrack = async (customTrack: TrackDef) => {

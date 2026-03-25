@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
@@ -352,6 +352,19 @@ io.on('connection', (socket) => {
       }
   });
 
+  async function handleEventCleanup(eventId) {
+      const playersInEvent = onlinePlayers.filter(x => x.eventId === eventId);
+      if (playersInEvent.length === 0) {
+          try {
+              await db.run("DELETE FROM events WHERE id = ?", [eventId]);
+              io.emit('trigger_refresh_events');
+          } catch (e) { console.error('Auto-delete error:', e); }
+      } else if (!playersInEvent.some(x => x.isHost)) {
+          playersInEvent[0].isHost = true;
+          io.to(eventId).emit('lobby_state', playersInEvent);
+      }
+  }
+
   socket.on('start_race', async (data) => {
       const p = onlinePlayers.find(p => p.socketId === socket.id);
       if (p && p.eventId) {
@@ -366,8 +379,15 @@ io.on('connection', (socket) => {
       }
   });
   
+  socket.on('advance_championship', () => {
+      const p = onlinePlayers.find(p => p.socketId === socket.id);
+      if (p && p.eventId && p.isHost) {
+          io.to(p.eventId).emit('championship_advanced');
+      }
+  });
+
   // Sair de um evento e voltar à box
-  socket.on('leave_event', () => {
+  socket.on('leave_event', async () => {
       const p = onlinePlayers.find(x => x.socketId === socket.id);
       if (p && p.eventId) {
          const oldEvent = p.eventId;
@@ -375,19 +395,23 @@ io.on('connection', (socket) => {
          p.eventId = null;
          p.isReady = false;
          p.status = 'available';
+         p.isHost = false;
          
          io.emit('global_roster', onlinePlayers);
          io.to(oldEvent).emit('lobby_state', onlinePlayers.filter(x => x.eventId === oldEvent));
+         await handleEventCleanup(oldEvent);
       }
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
       const p = onlinePlayers.find(x => x.socketId === socket.id);
       onlinePlayers = onlinePlayers.filter(x => x.socketId !== socket.id);
       if (p) {
          io.emit('global_roster', onlinePlayers);
          if (p.eventId) {
-             io.to(p.eventId).emit('lobby_state', onlinePlayers.filter(x => x.eventId === p.eventId));
+             const oldEvt = p.eventId;
+             io.to(oldEvt).emit('lobby_state', onlinePlayers.filter(x => x.eventId === oldEvt));
+             await handleEventCleanup(oldEvt);
          }
       }
   });
@@ -399,6 +423,15 @@ io.on('connection', (socket) => {
 
 async function startServer() {
   db = await initDB();
+  
+  // Limpeza de eventos órfãos de sessões anteriores gravados na BD
+  try {
+      await db.run("DELETE FROM events WHERE status = 'open'");
+      console.log('Orphan events purged from database.');
+  } catch (e) {
+      console.error('Failed to purge open events from DB:', e);
+  }
+
   server.listen(PORT, () => {
     console.log(`F1 2026 API & WSS Server running on http://localhost:${PORT}`);
   });
