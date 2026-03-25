@@ -34,6 +34,9 @@ export function RaceResults({ results, isHost, hasNextTrack, onNextTrack, onFini
   // Sort results by position
   const sorted = [...results].sort((a, b) => a.position - b.position);
   
+  const validLaps = results.map(r => r.bestLapMs).filter(l => l !== null && l > 0) as number[];
+  const absoluteBestLap = validLaps.length > 0 ? Math.min(...validLaps) : null;
+
   const podium = sorted.slice(0, 3);
   const others = sorted.slice(3);
 
@@ -127,7 +130,10 @@ export function RaceResults({ results, isHost, hasNextTrack, onNextTrack, onFini
                        </span>
                     </div>
                     <div className="w-28 text-right pr-4 border-r border-gray-800 flex items-center justify-end">
-                       <span className="font-mono text-xs text-purple-400">{formatTime(r.bestLapMs)}</span>
+                       <span className="font-mono text-xs text-purple-400">
+                          {r.bestLapMs === absoluteBestLap && r.bestLapMs !== null && <span className="text-yellow-400 mr-1 text-sm">⭐</span>}
+                          {formatTime(r.bestLapMs)}
+                       </span>
                     </div>
                     <div className="w-24 text-right pr-4 border-r border-gray-800 flex items-center justify-end gap-1">
                        <span className="text-white font-black text-lg">+{r.pointsEarned}</span>

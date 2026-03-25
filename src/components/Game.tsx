@@ -32,6 +32,17 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   const [, setForceRender] = useState(0);
   const [cameraModeUI, setCameraModeUI] = useState<'CENTRAL' | 'DYNAMIC' | 'QUADRANTS'>('CENTRAL');
 
+  const [finalClassification, setFinalClassification] = useState<RaceResultEntry[] | null>(null);
+
+  useEffect(() => {
+     const onFinalRaceResults = (classification: RaceResultEntry[]) => {
+         setFinalClassification(classification);
+         setRaceFinished(true); // forces physics to stop
+     };
+     socket.on('final_race_results', onFinalRaceResults);
+     return () => { socket.off('final_race_results', onFinalRaceResults); };
+  }, []);
+
   useEffect(() => {
       audio.init();
       return () => audio.stopAllEngines();
@@ -396,7 +407,17 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       const tH = (mainCar.tireHealth || 100).toFixed(1); ctx.textAlign = 'left'; ctx.fillStyle = parseFloat(tH) < 40 ? '#F00' : (parseFloat(tH) < 70 ? '#FD0' : '#0F0'); ctx.font='900 36px monospace'; ctx.fillText(`${tH}%`, hX+160, hY+41);
 
       if (startSequence > 0 && startSequence < 4) { ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(GAME_WIDTH/2-80, 50, 160, 60); for(let i=0; i<3; i++) { ctx.beginPath(); ctx.arc(GAME_WIDTH/2-40+i*40, 80, 15, 0, Math.PI*2); ctx.fillStyle = startSequence > i ? (i===2 ? '#0F0' : '#F00') : '#333'; ctx.fill(); } }
-      players.filter(p => !p.isBot).forEach(p => { const c = carsRef.current.find(x => x.id === p.id); if (!c) return; const tE = document.getElementById(`hud-time-${c.id}`); if (tE) tE.innerText = formatTime(Date.now() - (c.currentLapStartTime || startTimeRef.current || Date.now())); const lE = document.getElementById(`hud-lap-${c.id}`); if (lE) lE.innerText = `${Math.max(1, c.laps + 1)}/${totalLaps}`; });
+      players.filter(p => !p.isBot).forEach(p => { 
+          const c = carsRef.current.find(x => x.id === p.id); 
+          if (!c) return; 
+          const tE = document.getElementById(`hud-time-${c.id}`); 
+          if (tE) {
+              const displayTime = c.finishTime !== null ? c.finishTime : (Date.now() - (c.currentLapStartTime || startTimeRef.current || Date.now()));
+              tE.innerText = formatTime(displayTime);
+          }
+          const lE = document.getElementById(`hud-lap-${c.id}`); 
+          if (lE) lE.innerText = `${Math.max(1, (c.finishTime !== null ? totalLaps : c.laps + 1))}/${totalLaps}`; 
+      });
       carsRef.current.forEach(c => { const dot = document.getElementById(`minimap-dot-${c.id}`); if (dot) { dot.setAttribute('cx', c.x.toString()); dot.setAttribute('cy', c.y.toString()); } });
       animationFrameId = requestAnimationFrame(update);
     };
@@ -492,31 +513,40 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       )}
       {!raceFinished && ( <button onClick={() => onBackToMenu([], 'quit')} className="fixed top-4 right-4 bg-red-600 text-white font-bold px-4 py-2 hover:bg-red-700 z-50 rounded-lg">DESISTIR</button> )}
       {raceFinished && (() => {
-        // ROBUST CLASSIFICATION: Priority 1: Finished by time. Priority 2: Unfinished by progression.
-        const sorted = [...carsRef.current].sort((a,b) => {
-             if (a.finishTime !== null && b.finishTime !== null) return a.finishTime - b.finishTime;
-             if (a.finishTime !== null) return -1;
-             if (b.finishTime !== null) return 1;
-             const scoreA = (a.laps * 1000000) + a.currentWaypoint;
-             const scoreB = (b.laps * 1000000) + b.currentWaypoint;
-             return scoreB - scoreA;
-        });
-        const currentRes: RaceResultEntry[] = sorted.map((c, i) => {
-           const pDef = players.find(p => p.id === c.id);
-           const F1_PTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
-           return { 
-             playerId: c.id, 
-             position: i + 1, 
-             driverName: pDef?.driverName || (c.isBot ? 'BOT' : 'P'+c.id), 
-             teamName: pDef?.teamName || 'Independente', 
-             color: c.color, 
-             color2: c.color2, 
-             totalTimeMs: c.finishTime, 
-             bestLapMs: c.bestLapTime || null, 
-             pointsEarned: (i < 10 ? F1_PTS[i] : 0), 
-             totalChampionshipPoints: (championshipStandings[c.id] || 0) + (i < 10 ? F1_PTS[i] : 0) 
-           };
-        });
+        let currentRes: RaceResultEntry[] = [];
+        if (finalClassification) {
+            currentRes = finalClassification;
+        } else if (isHost) {
+            // ROBUST CLASSIFICATION: Priority 1: Finished by time. Priority 2: Unfinished by progression.
+            const sorted = [...carsRef.current].sort((a,b) => {
+                 if (a.finishTime !== null && b.finishTime !== null) return a.finishTime - b.finishTime;
+                 if (a.finishTime !== null) return -1;
+                 if (b.finishTime !== null) return 1;
+                 const scoreA = (a.laps * 1000000) + a.currentWaypoint;
+                 const scoreB = (b.laps * 1000000) + b.currentWaypoint;
+                 return scoreB - scoreA;
+            });
+            currentRes = sorted.map((c, i) => {
+               const pDef = players.find(p => p.id === c.id);
+               const F1_PTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
+               return { 
+                 playerId: c.id, 
+                 position: i + 1, 
+                 driverName: pDef?.driverName || (c.isBot ? 'BOT' : 'P'+c.id), 
+                 teamName: pDef?.teamName || 'Independente', 
+                 color: c.color, 
+                 color2: c.color2, 
+                 totalTimeMs: c.finishTime, 
+                 bestLapMs: c.bestLapTime || null, 
+                 pointsEarned: (i < 10 ? F1_PTS[i] : 0), 
+                 totalChampionshipPoints: (championshipStandings[c.id] || 0) + (i < 10 ? F1_PTS[i] : 0) 
+               };
+            });
+            setFinalClassification(currentRes);
+            socket.emit('host_race_results', currentRes);
+        } else {
+            return <div className="absolute inset-0 z-50 flex items-center justify-center p-8 bg-black/80"><div className="text-white text-3xl font-black italic animate-pulse">A SICRONIZAR RESULTADOS FIDEDIGNOS COM A FIA...</div></div>;
+        }
         return ( <RaceResults results={currentRes} isHost={isHost} hasNextTrack={hasNextTrack} onNextTrack={() => onBackToMenu(currentRes, 'next')} onFinishEvent={() => onBackToMenu(currentRes, 'finish')} /> );
       })()}
     </div>

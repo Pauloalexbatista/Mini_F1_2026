@@ -392,6 +392,17 @@ io.on('connection', (socket) => {
       }
   });
 
+  socket.on('refresh_events', () => {
+      io.emit('trigger_refresh_events');
+  });
+
+  socket.on('host_race_results', (data) => {
+      const p = onlinePlayers.find(p => p.socketId === socket.id);
+      if (p && p.eventId && p.isHost) {
+          io.to(p.eventId).emit('final_race_results', data);
+      }
+  });
+
   // Sair de um evento e voltar à box
   socket.on('leave_event', async () => {
       const p = onlinePlayers.find(x => x.socketId === socket.id);

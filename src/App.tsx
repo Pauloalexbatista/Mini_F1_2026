@@ -455,7 +455,10 @@ export default function App() {
           players={racePlayers.length > 0 ? racePlayers : activePlayers} 
           track={dbTracks.find(t => t.id === selectedTracks[currentChampionshipRaceIndex]) || dbTracks[0]}
           totalLaps={trackLapsMap[selectedTracks[currentChampionshipRaceIndex]] || totalLaps}
-          onBackToMenu={handleBackToMenu} 
+          onBackToMenu={handleBackToMenu}
+          championshipStandings={championshipStandings}
+          isHost={!activeEventId || lobbyState.find(p => p.socketId === socket.id)?.isHost === true}
+          hasNextTrack={currentChampionshipRaceIndex + 1 < selectedTracks.length}
         />
       )}
     </div>

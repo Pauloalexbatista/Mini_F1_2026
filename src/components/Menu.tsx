@@ -161,6 +161,12 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
     fetchEvents();
   }, [lobbyState]);
 
+  useEffect(() => {
+    const rf = () => fetchEvents();
+    socket.on('trigger_refresh_events', rf);
+    return () => { socket.off('trigger_refresh_events', rf); };
+  }, []);
+
   const fetchEvents = async () => {
     try {
       const res = await fetch('/api/events');
@@ -302,230 +308,194 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
       {/* Main Content Area */}
       <main className="max-w-[1400px] mx-auto px-4 sm:px-8 py-10 flex-1 w-full z-10 relative">
         
-        {activeTab === 'overview' && (
-           <div className="animate-in fade-in duration-500">
-             {/* === IN EVENT LOBBY === */}
-             {activeEventId ? (
-               <div className="flex flex-col lg:flex-row gap-8 mb-12">
-                 {/* LEFT: Event Details */}
-                 <div className="flex-1 bg-[#15151e] border-2 border-[#E10600] rounded-xl p-6">
+                  {activeTab === 'overview' && (
+            <div className="animate-in fade-in duration-500">
+              {showEventCreator ? (
+                <div className="bg-[#15151e] border-2 border-[#E10600] rounded-xl p-8 max-w-2xl mx-auto shadow-2xl">
                    <div className="flex items-center gap-3 mb-6 border-b border-gray-800 pb-4">
-                     <div className="w-1.5 h-6 bg-[#E10600]"></div>
-                     <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">Sala do Evento</h3>
+                      <div className="w-1.5 h-6 bg-[#E10600]"></div>
+                      <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">CRIAR NOVO CAMPEONATO</h3>
                    </div>
-                   <div className="flex flex-col gap-3 mb-6">
-                     {selectedTracks.map((tid, idx) => {
-                       const t = tracks.find(x => x.id === tid);
-                       return t ? (
-                         <div key={tid} className="bg-[#1e1e24] border-l-4 border-[#E10600] p-3 rounded flex justify-between">
-                           <span className="font-black text-white uppercase text-sm tracking-widest">{t.name}</span>
-                           <span className="text-[10px] text-[#E10600] font-bold uppercase">RONDA {idx+1}</span>
-                         </div>
-                       ) : null;
-                     })}
+                   <div className="mb-6 flex flex-col gap-2">
+                      <label className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Nome do Evento</label>
+                      <input type="text" placeholder="Ex: Grande Prémio da Madeira" value={eventName} onChange={e => setEventName(e.target.value)} className="bg-black text-white font-bold p-3 rounded border border-gray-700 outline-none focus:border-[#E10600] transition-colors uppercase tracking-widest text-sm" />
                    </div>
-                   <div className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-2">{totalLaps} Voltas por Ronda</div>
-                   <button
-                     onClick={onLeaveEvent}
-                     className="mt-4 text-[10px] text-gray-400 border border-gray-700 px-4 py-2 rounded uppercase tracking-widest hover:text-red-500 hover:border-red-500 transition-colors"
-                   >Abandonar Sala</button>
-                 </div>
-                 {/* RIGHT: Grid */}
-                 <div className="flex-1 bg-[#15151e] border-2 border-gray-800 rounded-xl p-6">
-                   <div className="flex items-center gap-3 mb-6 border-b border-gray-800 pb-4">
-                     <div className="w-1.5 h-6 bg-white"></div>
-                     <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">Grelha de Partida</h3>
+                   <div className="mb-6 flex flex-col gap-2">
+                      <label className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Configuração por Pista ({selectedTracks.length} selecionadas)</label>
+                      {selectedTracks.length === 0 ? (
+                        <div className="text-[10px] text-yellow-500 font-bold uppercase tracking-widest bg-yellow-900/10 p-3 rounded border border-yellow-800/30">⚠ Seleciona pelo menos 1 pista no separador TRACKS antes de criar</div>
+                      ) : (
+                        <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                          {selectedTracks.map((tid) => {
+                             const t = tracks.find(x => x.id === tid);
+                             return t ? (
+                               <div key={tid} className="flex justify-between items-center bg-[#1e1e24] border-l-4 border-[#E10600] p-3 rounded">
+                                  <span className="text-sm font-bold text-white uppercase tracking-widest truncate pr-2">{t.name}</span>
+                                  <div className="flex items-center gap-3">
+                                     <span className="text-[10px] text-gray-500 uppercase font-bold tracking-widest">Voltas:</span>
+                                     <input type="number" min="1" max="99" value={eventTrackLaps[tid] || 3} onChange={e => setEventTrackLaps({...eventTrackLaps, [tid]: parseInt(e.target.value)||1})} className="bg-black text-yellow-500 font-black text-lg text-center w-14 p-1 rounded border border-gray-700 outline-none focus:border-yellow-500" />
+                                  </div>
+                               </div>
+                             ) : null;
+                          })}
+                        </div>
+                      )}
+                      <button onClick={() => setActiveTab('tracks')} className="text-[10px] text-[#E10600] hover:text-white border border-[#E10600]/30 hover:bg-[#E10600]/10 px-4 py-2 rounded uppercase tracking-widest transition-colors self-start mt-2">← Escolher Mais Pistas</button>
                    </div>
-                   <div className="flex flex-col gap-3">
-                     {lobbyState.map((p, idx) => {
-                       const isMe = p.socketId === socket.id;
-                       return (
-                         <div key={p.socketId} className={`bg-black/60 border ${p.isReady ? 'border-[#E10600]' : 'border-gray-700'} p-4 flex justify-between items-center rounded-lg relative overflow-hidden`}>
-                           <div className="absolute left-0 top-0 w-1.5 h-full" style={{ backgroundColor: p.color }}></div>
-                           <div className="pl-3 flex flex-col">
-                             <span className="text-white font-black uppercase tracking-tighter text-lg">
-                               {p.driverName}
-                               {idx === 0 && <span className="text-[#E10600] ml-2 text-[10px] border border-[#E10600] rounded px-1.5 py-0.5">(HOST)</span>}
-                               {isMe && <span className="text-gray-400 ml-2 text-[10px] border border-gray-600 rounded px-1.5 py-0.5">(TU)</span>}
-                             </span>
-                             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{p.teamName}</span>
-                           </div>
-                           <div>
-                             {isMe ? (
-                               <button
-                                 onClick={() => socket.emit('set_ready', !p.isReady)}
-                                 className={`${p.isReady ? 'bg-green-600 text-white border border-green-500 shadow-[0_0_15px_rgba(22,163,74,0.4)]' : 'bg-transparent border border-gray-600 text-gray-500 hover:bg-gray-800 hover:text-white'} px-6 py-3 rounded text-xs font-black italic uppercase tracking-widest transition-all flex items-center gap-2`}
-                               >
-                                 {p.isReady ? <><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg> PRONTO</> : 'CLICAR PRONTO'}
-                               </button>
-                             ) : (
-                               <span className={`${p.isReady ? 'text-green-500 border-green-500 bg-green-900/20' : 'text-gray-500 border-gray-700'} border px-4 py-2 rounded text-[10px] uppercase tracking-widest`}>
-                                 {p.isReady ? 'PRONTO A CORRER' : 'A PREPARAR...'}
-                               </span>
-                             )}
-                           </div>
-                         </div>
-                       );
-                     })}
-                     {lobbyState.length === 0 && (
-                       <div className="text-center text-gray-600 font-bold uppercase tracking-widest text-[10px] p-8">A aguardar pilotos...</div>
-                     )}
-                   </div>
-                 </div>
-               </div>
-             ) : (
-               /* === EVENT BROWSER + CREATOR === */
-               <div className="flex flex-col gap-8">
-                 {showEventCreator ? (
-                   /* CREATE EVENT FORM */
-                   <div className="bg-[#15151e] border-2 border-[#E10600] rounded-xl p-6 max-w-xl mx-auto w-full">
-                     <div className="flex items-center gap-3 mb-6 border-b border-gray-800 pb-4">
-                       <div className="w-1.5 h-6 bg-[#E10600]"></div>
-                       <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">Criar Evento</h3>
-                     </div>
-                     <div className="mb-4">
-                       <label className="text-[10px] text-gray-400 uppercase tracking-widest font-bold block mb-2">Nome do Evento</label>
-                       <input
-                         type="text"
-                         placeholder="ex: GP MINI BAHRAIN"
-                         value={eventName}
-                         onChange={e => setEventName(e.target.value.toUpperCase())}
-                         className="w-full bg-black text-white font-black tracking-widest uppercase p-3 rounded border border-gray-700 focus:border-[#E10600] outline-none transition-colors placeholder:text-gray-700"
-                         maxLength={30}
-                       />
-                     </div>
-                     <div className="mb-4 flex flex-col gap-2">
-                       <label className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Pistas ({selectedTracks.length} selecionadas)</label>
-                       {selectedTracks.length === 0 && (
-                         <div className="text-[10px] text-yellow-500 font-bold uppercase tracking-widest">⚠ Seleciona pelo menos 1 pista no separador TRACKS</div>
-                       )}
-                       {selectedTracks.map((tid, idx) => {
-                         const t = tracks.find(x => x.id === tid);
-                         return t ? (
-                           <div key={tid} className="bg-[#1e1e24] border-l-4 border-[#E10600] p-2 rounded text-sm font-bold text-white uppercase tracking-widest">{t.name}</div>
-                         ) : null;
-                       })}
-                       <button onClick={() => setActiveTab('tracks')} className="text-[10px] text-gray-400 hover:text-white border border-gray-700 px-3 py-1.5 rounded uppercase tracking-widest transition-colors self-start">+ Escolher Pistas</button>
-                     </div>
-                     <div className="mb-6 flex items-center gap-4">
-                       <label className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Voltas</label>
-                       <input type="number" min="1" max="99" value={totalLaps} onChange={e => setTotalLaps(parseInt(e.target.value)||1)} className="bg-black text-[#E10600] font-black text-xl text-center w-16 p-2 rounded border border-gray-700 outline-none" />
-                     </div>
-                     <div className="flex gap-3">
-                       <button
-                         onClick={async () => {
+                   <div className="flex gap-4 mt-8 pt-6 border-t border-gray-800">
+                      <button onClick={async () => {
                            if (!selectedTracks.length || !eventName.trim()) return;
                            const token = localStorage.getItem('token');
-                           const eid = `evt_${Date.now()}`;
+                           const eid = 'evt_' + Date.now();
                            const trackEntries = selectedTracks.map(id => ({ id, laps: eventTrackLaps[id] ?? 3 }));
                            await fetch('/api/events', {
                              method: 'POST',
-                             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                             body: JSON.stringify({ id: eid, name: eventName.trim(), tracks_json: JSON.stringify(trackEntries), laps: 3 })
+                             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                             body: JSON.stringify({ id: eid, name: eventName.trim(), tracks_json: JSON.stringify(trackEntries), laps: trackEntries[0]?.laps || 3 })
                            });
                            socket.emit('refresh_events');
                            setShowEventCreator(false);
                            setEventName('');
-                           fetchEvents();
                            if (onJoinEvent) onJoinEvent(eid, trackEntries);
-                         }}
-                         disabled={!selectedTracks.length || !eventName.trim()}
-                         className="flex-1 bg-[#E10600] text-white font-black uppercase tracking-widest px-6 py-3 rounded hover:bg-white hover:text-[#E10600] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                       >Criar e Entrar</button>
-                       <button onClick={() => setShowEventCreator(false)} className="border border-gray-700 text-gray-400 hover:text-white px-6 py-3 rounded font-bold uppercase tracking-widest transition-colors">Cancelar</button>
-                     </div>
+                        }} disabled={!selectedTracks.length || !eventName.trim()} className="flex-1 bg-[#E10600] text-white font-black uppercase tracking-widest px-8 py-4 rounded-xl hover:bg-white hover:text-[#E10600] transition-colors disabled:opacity-30 disabled:cursor-not-allowed shadow-lg">CRIAR E ENTRAR NO PADDOCK</button>
+                      <button onClick={() => setShowEventCreator(false)} className="px-8 py-4 border border-gray-700 text-gray-400 hover:text-white rounded-xl font-bold uppercase tracking-widest transition-colors">CANCELAR</button>
                    </div>
-                 ) : (
-                   <div className="flex flex-col lg:flex-row gap-8">
-                     {/* LEFT: Open Events */}
-                     <div className="flex-1 bg-[#15151e] border-2 border-gray-800 rounded-xl p-6">
-                       <div className="flex items-center justify-between mb-6 border-b border-gray-800 pb-4">
-                         <div className="flex items-center gap-3">
-                           <div className="w-1.5 h-6 bg-[#E10600]"></div>
-                           <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">Eventos Abertos</h3>
-                         </div>
-                         <button onClick={fetchEvents} className="text-[10px] text-gray-500 hover:text-white font-bold uppercase tracking-widest border border-gray-700 px-3 py-1.5 rounded transition-colors">↻ Atualizar</button>
+                </div>
+              ) : activeEventId ? (
+                <div className="flex flex-col lg:flex-row gap-8">
+                  <div className="flex-1 bg-[#15151e] border-2 border-[#E10600] rounded-xl p-8 shadow-2xl">
+                    <div className="flex items-center justify-between mb-8 border-b border-gray-800 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-7 bg-[#E10600]"></div>
+                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">Paddock Oficial</h3>
+                      </div>
+                      <button onClick={() => onLeaveEvent && onLeaveEvent()} className="text-[10px] text-red-500 hover:bg-red-900/20 border border-red-900/50 px-4 py-2 rounded uppercase font-black tracking-widest transition-colors">Sair da Prova</button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                       <div className="flex flex-col gap-3">
+                          <label className="text-[10px] text-gray-500 uppercase tracking-widest font-black mb-2">Pistas do Evento</label>
+                          <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                             {selectedTracks.map((tid, idx) => {
+                                const t = tracks.find(x => x.id === tid);
+                                if (!t) return null;
+                                return (
+                                  <div key={tid} className="flex justify-between items-center bg-[#1e1e24] p-3 rounded border-l-4 border-gray-700">
+                                     <span className="text-xs font-black text-gray-300 uppercase tracking-widest">{idx+1}. {t.name}</span>
+                                     <span className="text-[10px] text-[#E10600] font-black uppercase">Voltas: {eventTrackLaps[tid] || totalLaps}</span>
+                                  </div>
+                                );
+                             })}
+                          </div>
                        </div>
-                       {openEvents.length === 0 ? (
-                         <div className="flex flex-col items-center justify-center min-h-[200px] gap-4">
-                           <svg className="w-12 h-12 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064" /></svg>
-                           <p className="text-gray-500 font-bold uppercase tracking-widest text-xs text-center">Nenhum evento aberto.<br/>Sê o primeiro a criar um!</p>
-                         </div>
-                       ) : (
-                         <div className="flex flex-col gap-3">
-                           {openEvents.map(ev => {
-                             let evTracks: {id: string, laps: number}[] = [];
-                             try {
-                               const parsed = JSON.parse(ev.tracks_json || '[]');
-                               if (Array.isArray(parsed) && parsed.length > 0) {
-                                   if (typeof parsed[0] === 'string') {
-                                       evTracks = parsed.map((id: string) => ({id, laps: ev.laps || 3}));
-                                   } else {
-                                       evTracks = parsed.filter((t: any) => t && typeof t.id === 'string');
-                                   }
-                               }
-                             } catch (e) { evTracks = []; }
-                             const joinedIds = lobbyState.map((p:any) => p.userId);
-                             return (
-                               <div key={ev.id} className="bg-black/60 border border-gray-700 hover:border-[#E10600] rounded-lg p-4 flex justify-between items-center transition-colors group">
-                                 <div>
-                                   <div className="text-white font-black uppercase tracking-widest text-base">{ev.name}</div>
-                                   <div className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">{ev.host_name} · {evTracks.length} pista{evTracks.length!==1?'s':''} · {ev.laps} volta{ev.laps!==1?'s':''}</div>
-                                 </div>
-                                 <button
-                                   onClick={() => onJoinEvent && onJoinEvent(ev.id, evTracks)}
-                                   className="bg-[#E10600] text-white font-black uppercase tracking-widest text-[10px] px-4 py-2 rounded hover:bg-white hover:text-[#E10600] transition-colors"
-                                 >JUNTAR</button>
+                       <div className="flex flex-col gap-3">
+                          <label className="text-[10px] text-gray-500 uppercase tracking-widest font-black mb-2">Grella de Partida ({lobbyState.length})</label>
+                          <div className="flex flex-col gap-2">
+                             {lobbyState.map((p) => (
+                               <div key={p.socketId} className="flex items-center justify-between bg-black/40 p-3 rounded border-r-4" style={{borderRightColor: p.color}}>
+                                  <div className="flex items-center gap-3">
+                                     <div className={'w-2 h-2 rounded-full ' + (p.isReady ? 'bg-green-500 animate-pulse' : 'bg-gray-600')}></div>
+                                     <span className="text-sm font-black text-white uppercase tracking-tighter italic">{p.driverName} {p.isHost ? '(HOST)' : ''}</span>
+                                  </div>
+                                  <span className={'text-[9px] font-black uppercase px-2 py-1 rounded ' + (p.isReady ? 'text-green-500 bg-green-900/20' : 'text-gray-500 bg-gray-800')}>
+                                     {p.isReady ? 'PRONTO' : 'NA BOX'}
+                                  </span>
                                </div>
-                             );
-                           })}
-                         </div>
-                       )}
-                       <button
-                         onClick={openCreator}
-                         className="mt-6 w-full border-2 border-dashed border-gray-700 hover:border-[#E10600] text-gray-500 hover:text-white font-black uppercase tracking-widest py-4 rounded-xl transition-colors flex items-center justify-center gap-2"
-                       >
-                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-                         Criar Novo Evento
-                       </button>
-                     </div>
-                     {/* RIGHT: Global Pilot Roster */}
-                     <div className="w-full lg:w-80 bg-[#15151e] border-2 border-gray-800 rounded-xl p-6">
-                       <div className="flex items-center gap-3 mb-6 border-b border-gray-800 pb-4">
-                         <div className="w-1.5 h-6 bg-white"></div>
-                         <h3 className="text-xl font-black text-white uppercase tracking-tighter italic">Pilotos Online</h3>
-                         <span className="text-[10px] text-green-500 font-bold border border-green-800 bg-green-900/20 rounded px-2 py-0.5 ml-auto">{globalRoster.filter(p => p.status !== 'racing').length} Disponível{globalRoster.filter(p => p.status !== 'racing').length!==1?'is':''}</span>
+                             ))}
+                          </div>
                        </div>
-                       {globalRoster.length === 0 ? (
-                         <div className="text-center text-gray-600 font-bold uppercase tracking-widest text-[10px] py-8">Nenhum piloto online</div>
+                    </div>
+                    <div className="pt-8 border-t border-gray-800 flex justify-center">
+                       {lobbyState.find((p) => p.socketId === socket.id)?.isReady ? (
+                          <div className="text-yellow-500 font-black text-xl italic animate-pulse tracking-widest text-center">A AGUARDAR AUTORIZAÇÃO DA DIREÇÃO DE CORRIDA...<br/><span className="text-xs uppercase text-gray-500 not-italic mt-2 block">Clica no botão "IR PARA A CORRIDA" quando o Host autorizar</span></div>
                        ) : (
-                         <div className="flex flex-col gap-2">
-                           {globalRoster.map(p => (
-                             <div key={p.socketId} className="flex items-center gap-3 py-2 border-b border-gray-800/50">
-                               <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }}></div>
-                               <div className="flex-1 min-w-0">
-                                 <div className="text-white font-black text-xs uppercase tracking-wide truncate">{p.driverName}</div>
-                               </div>
-                               <span className={`text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded border ${
-                                 p.status === 'racing' ? 'text-red-400 border-red-800 bg-red-900/20' :
-                                 p.status === 'in_lobby' ? 'text-yellow-400 border-yellow-800 bg-yellow-900/20' :
-                                 'text-green-400 border-green-800 bg-green-900/20'
-                               }`}>
-                                 {p.status === 'racing' ? 'Em Pista' : p.status === 'in_lobby' ? 'Na Box' : 'Disponível'}
-                               </span>
-                             </div>
-                           ))}
-                         </div>
+                          <button onClick={() => socket.emit('player_ready')} className="bg-green-600 text-white font-black uppercase tracking-widest px-16 py-5 rounded-xl hover:bg-green-500 transition-colors shadow-[0_0_30px_rgba(34,197,94,0.3)] text-xl">ESTOU PRONTO PARA CORRER</button>
                        )}
-                     </div>
-                   </div>
-                 )}
-               </div>
-             )}
-           </div>
-        )}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col lg:flex-row gap-8">
+                  <div className="flex-1 bg-[#15151e] border-2 border-gray-800 rounded-xl p-8 shadow-2xl">
+                    <div className="flex items-center justify-between mb-8 border-b border-gray-800 pb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-1.5 h-7 bg-[#E10600]"></div>
+                        <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic">Campeonatos em Aberto</h3>
+                      </div>
+                      <button onClick={fetchEvents} className="text-[10px] text-gray-400 hover:text-white hover:bg-gray-800 border border-gray-700 px-4 py-2 rounded uppercase tracking-widest transition-all font-black flex items-center gap-2">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                        ATUALIZAR LISTA
+                      </button>
+                    </div>
+                    {openEvents.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-16 gap-4 opacity-40">
+                        <svg className="w-20 h-20 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        <p className="text-gray-500 font-bold uppercase tracking-widest text-xs text-center leading-relaxed">Nenhum evento ativo neste momento.<br/>Cria a tua própria temporada ou desafia um amigo.</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {openEvents.map(ev => {
+                          let evTracks = [];
+                          try {
+                            const parsed = JSON.parse(ev.tracks_json || '[]');
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                                if (typeof parsed[0] === 'string') {
+                                    evTracks = parsed.map((id) => ({id, laps: ev.laps || 3}));
+                                } else {
+                                    evTracks = parsed.filter((t) => t && typeof t.id === 'string');
+                                }
+                            }
+                          } catch (e) { evTracks = []; }
+                          return (
+                            <div key={ev.id} className="bg-[#1a1a24] border border-gray-800 hover:border-[#E10600] rounded-xl p-5 flex flex-col justify-between transition-all group shadow-lg">
+                              <div className="mb-4">
+                                <div className="text-white font-black uppercase tracking-tighter text-xl italic group-hover:text-[#E10600] transition-colors">{ev.name}</div>
+                                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                                   <span className="text-[9px] text-gray-400 font-black uppercase tracking-widest flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-gray-600 rounded-full"></div>{ev.host_name}</span>
+                                   <span className="text-[9px] text-[#E10600] font-black uppercase tracking-widest flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-[#E10600] rounded-full"></div>{evTracks.length} ETAPAS</span>
+                                   <span className="text-[9px] text-yellow-500 font-black uppercase tracking-widest flex items-center gap-1.5"><div className="w-1.5 h-1.5 bg-yellow-500 rounded-full"></div>{evTracks[0]?.laps || ev.laps || 3} VOLTAS</span>
+                                </div>
+                              </div>
+                              <button onClick={() => onJoinEvent && onJoinEvent(ev.id, evTracks)} className="w-full bg-white text-black font-black uppercase tracking-widest text-[11px] py-3 rounded-lg hover:bg-[#E10600] hover:text-white transition-all shadow-md mt-2">JUNTAR À CORRIDA</button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <button onClick={openCreator} className="mt-8 w-full border-2 border-dashed border-gray-700 hover:border-[#E10600] text-gray-500 hover:text-white font-black uppercase tracking-[0.2em] py-5 rounded-2xl transition-all flex items-center justify-center gap-3 bg-[#111116]/50 hover:bg-[#E10600]/5 group">
+                      <div className="bg-gray-800 group-hover:bg-[#E10600] p-1.5 rounded transition-colors"><svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg></div>
+                      CRIAR NOVO EVENTO ONLINE
+                    </button>
+                  </div>
+                  <div className="w-full lg:w-96 bg-[#15151e] border-2 border-gray-800 rounded-xl p-8 shadow-2xl h-fit">
+                    <div className="flex items-center gap-3 mb-8 border-b border-gray-800 pb-4">
+                      <div className="w-1.5 h-7 bg-white"></div>
+                      <h3 className="text-2xl font-black text-white uppercase tracking-tighter italic leading-none">Pilotos Online</h3>
+                      <span className="text-[10px] text-green-500 font-black border border-green-800 bg-green-900/20 rounded-full px-3 py-1 ml-auto">{globalRoster.length}</span>
+                    </div>
+                    {globalRoster.length === 0 ? (
+                      <div className="text-center text-gray-600 font-black uppercase tracking-widest text-[10px] py-12">Nenhum piloto detetado</div>
+                    ) : (
+                      <div className="flex flex-col gap-3">
+                        {globalRoster.map(p => (
+                          <div key={p.socketId} className="flex items-center gap-4 py-3 border-b border-gray-800/50 hover:bg-white/5 px-2 rounded -mx-2 transition-colors">
+                            <div className="w-3.5 h-3.5 rounded-sm flex-shrink-0 rotate-45 border border-white/20" style={{ backgroundColor: p.color }}></div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-white font-black text-xs uppercase tracking-tight truncate italic">{p.driverName}</div>
+                            </div>
+                            <span className={'text-[9px] font-black uppercase tracking-tighter px-2.5 py-1 rounded-sm border ' + (p.status === 'racing' ? 'text-red-400 border-red-800 bg-red-900/20' : p.status === 'in_lobby' ? 'text-yellow-400 border-yellow-800 bg-yellow-900/40' : 'text-green-400 border-green-800 bg-green-900/20')}>
+                              {p.status === 'racing' ? '🏁 EM PISTA' : p.status === 'in_lobby' ? '⛽ NA BOX' : '✅ DISPONÍVEL'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
 
-        {/* TEAMS CAROUSEL UI -> CHANGED TO GARAGE UI */}
+{/* TEAMS CAROUSEL UI -> CHANGED TO GARAGE UI */}
         {activeTab === 'teams' && (
            <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center min-h-[60vh]">
              <div className="mb-6 border-b border-gray-800 pb-4 text-center w-full max-w-4xl">
