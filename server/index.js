@@ -309,6 +309,7 @@ io.on('connection', (socket) => {
           
           p.eventId = eventId;
           p.isReady = false;
+          p.setupReady = false; // Reset setup readiness on join
           p.status = 'in_lobby';
           socket.join(eventId);
           
@@ -371,8 +372,12 @@ io.on('connection', (socket) => {
           // Mark event as 'racing' in DB so it disappears from the open events list
           try { await db.run("UPDATE events SET status = 'racing' WHERE id = ?", [p.eventId]); } catch(e) {}
           // Update all players in the room to 'racing' status
-          onlinePlayers.filter(x => x.eventId === p.eventId).forEach(x => x.status = 'racing');
-          io.emit('global_roster', onlinePlayers);
+          const roomPlayers = onlinePlayers.filter(x => x.eventId === p.eventId);
+          roomPlayers.forEach(x => {
+              x.status = 'racing';
+              x.setupReady = false; // Ensure reset before race starts
+          });
+          console.log(`[EVENT] Starting race for event ${p.eventId}. Players: ${roomPlayers.length}`);
           io.to(p.eventId).emit('race_started', data);
           // Notify all clients to refresh their events list (event is now gone)
           io.emit('trigger_refresh_events');

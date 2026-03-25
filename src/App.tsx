@@ -8,21 +8,6 @@ import { TRACKS, TrackDef, parseStudioToNodes, parseStudioControlPoints, fuseAnd
 import { TrackBuilder } from './components/TrackBuilder';
 import { socket } from './socket';
 
-const BOT_NAMES = [
-  'Racer X', 'Speedy Gonzales', 'Turbo Tom', 'Flash Gordon', 'Captain Crash',
-  'Nitro Nick', 'Zoomer', 'Blaze', 'Vortex', 'Maverick', 'Stinger', 'Phantom',
-  'Road Runner', 'Hot Rod Harry', 'Gearhead Greg', 'Piston Pete', 'Drift King',
-  'Apex Ace', 'Gridlock Gary', 'Burnout Bob'
-];
-
-const DEFAULT_CONTROLS = [
-  { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', camera: 'KeyC' },
-  { up: 'KeyQ', down: 'KeyA', left: 'KeyO', right: 'KeyP', camera: 'KeyC' },
-  { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', camera: 'KeyC' },
-  { up: 'Numpad8', down: 'Numpad5', left: 'Numpad4', right: 'Numpad6', camera: 'Numpad0' },
-  { up: 'KeyI', down: 'KeyK', left: 'KeyJ', right: 'KeyL', camera: 'KeyM' }
-];
-
 const randomHex = () => '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
 const defaultGuestName = 'PILOTO ' + Math.floor(Math.random() * 9999);
 
@@ -45,6 +30,39 @@ export default function App() {
   useEffect(() => { dbTracksRef.current = dbTracks; }, [dbTracks]);
   // Mirror for computed activePlayers so socket handlers can read without stale closure
   const activePlayersRef = useRef<PlayerConfig[]>([]);
+
+  const fetchTracks = async (token: string, isAdmin: boolean) => {
+    try {
+      const trackRes = await fetch('/api/tracks');
+      let trackData = await trackRes.json();
+      
+      if (trackData.length === 0 && isAdmin) {
+         for (const t of TRACKS) {
+           await fetch('/api/tracks', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ id: t.id, name: t.name, svg_data: t.svg_data || '', pit_svg_data: t.pit_svg_data || '' })
+           });
+         }
+         const trackRes2 = await fetch('/api/tracks');
+         trackData = await trackRes2.json();
+      }
+      
+      if (trackData.length > 0) {
+         const parsedTracks = trackData.map((t: any) => ({
+            id: t.id, name: t.name, 
+            nodes: parseStudioToNodes(t.svg_data, 15.0, 250, true),
+            pitNodes: fuseAndComputePitLane(
+                parseStudioControlPoints(t.svg_data, 15.0, 250, true), 
+                parseStudioControlPoints(t.pit_svg_data, 15.0, 187.5, false)
+            )
+         }));
+         setDbTracks(parsedTracks);
+         // Se não houver pistas selecionadas, seleciona a primeira
+         setSelectedTracks(prev => prev.length === 0 ? [parsedTracks[0].id] : prev);
+      }
+    } catch(e) { console.error("Track Fetch Error", e); }
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -74,35 +92,7 @@ export default function App() {
              return np;
           });
           
-          try {
-             const trackRes = await fetch('/api/tracks');
-             let trackData = await trackRes.json();
-             
-             if (trackData.length === 0 && userData.role === 'admin') {
-                for (const t of TRACKS) {
-                  await fetch('/api/tracks', {
-                     method: 'POST',
-                     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                     body: JSON.stringify({ id: t.id, name: t.name, svg_data: t.svg_data || '', pit_svg_data: t.pit_svg_data || '' })
-                  });
-                }
-                const trackRes2 = await fetch('/api/tracks');
-                trackData = await trackRes2.json();
-             }
-             
-             if (trackData.length > 0) {
-                const parsedTracks = trackData.map((t: any) => ({
-                   id: t.id, name: t.name, 
-                   nodes: parseStudioToNodes(t.svg_data, 15.0, 250, true),
-                   pitNodes: fuseAndComputePitLane(
-                       parseStudioControlPoints(t.svg_data, 15.0, 250, true), 
-                       parseStudioControlPoints(t.pit_svg_data, 15.0, 187.5, false)
-                   )
-                }));
-                setDbTracks(parsedTracks);
-                setSelectedTracks([parsedTracks[0].id]);
-             }
-          } catch(e) { console.error("Track Fetch", e); }
+          await fetchTracks(token, userData.role === 'admin');
           
         } else {
           localStorage.removeItem('token');
@@ -114,12 +104,19 @@ export default function App() {
     };
     checkAuth();
   }, []);
+
   const [playerCount, setPlayerCount] = useState(1);
   const [selectedTracks, setSelectedTracks] = useState<string[]>([]);
   const [currentChampionshipRaceIndex, setCurrentChampionshipRaceIndex] = useState(0);
   const [championshipStandings, setChampionshipStandings] = useState<Record<number, number>>({});
   const [totalLaps, setTotalLaps] = useState(3);
   
+  const DEFAULT_CONTROLS = [
+    { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', camera: 'KeyC' },
+    { up: 'KeyQ', down: 'KeyA', left: 'KeyO', right: 'KeyP', camera: 'KeyC' },
+    { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', camera: 'KeyC' }
+  ];
+
   const [players, setPlayers] = useState<PlayerConfig[]>([
     {
       id: 1,
@@ -156,7 +153,7 @@ export default function App() {
            setActiveEventId(prev => prev); // force re-render
         };
 
-        const onStartRace = (data: any) => {
+        const onStartRace = async (data: any) => {
             if (data && data.trackEntries) {
                 const entries: {id: string, laps: number}[] = data.trackEntries;
                 setSelectedTracks(entries.map(e => e.id));
@@ -164,9 +161,19 @@ export default function App() {
                 entries.forEach(e => { lapsMap[e.id] = e.laps; });
                 setTrackLapsMap(lapsMap);
             }
+            
+            // Safety: Ensure tracks are loaded before starting, or wait a bit
+            if (dbTracksRef.current.length === 0) {
+               const token = localStorage.getItem('token');
+               if (token) await fetchTracks(token, false);
+            }
+
             if (dbTracksRef.current.length > 0) {
                setRacePlayers([...activePlayersRef.current]);
                setAppState('playing');
+            } else {
+               console.error("Critical: Race starting but no tracks loaded!");
+               alert("Erro: Não foi possível carregar os dados da pista a tempo.");
             }
         };
 
@@ -284,7 +291,7 @@ export default function App() {
        }
        setSelectedTracks([customTrack.id]);
        setAppState('menu');
-    } catch(e) {
+     } catch(e) {
        console.error("Error saving track to cloud", e);
        alert("Erro de Ligação ao Servidor F1 VPS.");
     }
@@ -316,7 +323,7 @@ export default function App() {
   let activePlayers: PlayerConfig[] = [];
   
   if (lobbyState.length > 0) {
-      activePlayers = lobbyState.map((p, i) => {
+      activePlayers = lobbyState.map((p) => {
           const isLocal = p.socketId === socket.id;
           return {
               id: p.socketId,
@@ -355,9 +362,9 @@ export default function App() {
   if (activePlayers.length > 0 && activePlayers.length < 10) {
       const neededBots = 10 - activePlayers.length;
       
-      const BOT_NAMES = ['A. Silva', 'M. Verstappen', 'L. Hamilton', 'F. Alonso', 'C. Leclerc', 'L. Norris', 'C. Sainz', 'G. Russell', 'O. Piastri', 'S. Perez', 'A. Albon', 'Y. Tsunoda', 'N. Hulkenberg', 'V. Bottas', 'E. Ocon', 'P. Gasly', 'K. Magnussen', 'Z. Guanyu', 'L. Stroll', 'L. Lawson', 'A. Senna'];
+      const BOT_NAMES_DYN = ['A. Silva', 'M. Verstappen', 'L. Hamilton', 'F. Alonso', 'C. Leclerc', 'L. Norris', 'C. Sainz', 'G. Russell', 'O. Piastri', 'S. Perez', 'A. Albon', 'Y. Tsunoda', 'N. Hulkenberg', 'V. Bottas', 'E. Ocon', 'P. Gasly', 'K. Magnussen', 'Z. Guanyu', 'L. Stroll', 'L. Lawson', 'A. Senna'];
       const takenNames = activePlayers.map(p => p.driverName);
-      const availableNames = BOT_NAMES.filter(n => !takenNames.includes(n)).sort(() => Math.random() - 0.5);
+      const availableNames = BOT_NAMES_DYN.filter(n => !takenNames.includes(n)).sort(() => Math.random() - 0.5);
 
       for (let i = 0; i < neededBots; i++) {
           const hue1 = Math.floor(Math.random() * 360);
@@ -398,6 +405,7 @@ export default function App() {
       <Auth onLogin={(token, loggedUser) => {
         localStorage.setItem('token', token);
         setUser(loggedUser);
+        fetchTracks(token, loggedUser.role === 'admin');
         setPlayers(prev => {
              const np = [...prev];
              np[0] = {
