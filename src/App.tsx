@@ -182,11 +182,18 @@ export default function App() {
              setCurrentChampionshipRaceIndex(prev => prev + 1);
         };
 
+        const onChampionshipFinished = () => {
+             setAppState('menu');
+             setCurrentChampionshipRaceIndex(0);
+             setChampionshipStandings({});
+        };
+
         socket.on('global_roster', onGlobalRoster);
         socket.on('lobby_state', onLobbyState);
         socket.on('trigger_refresh_events', onTriggerRefresh);
         socket.on('race_started', onStartRace);
         socket.on('championship_advanced', onChampionshipAdvanced);
+        socket.on('championship_finished', onChampionshipFinished);
 
         return () => {
             socket.off('global_roster', onGlobalRoster);
@@ -194,6 +201,7 @@ export default function App() {
             socket.off('trigger_refresh_events', onTriggerRefresh);
             socket.off('race_started', onStartRace);
             socket.off('championship_advanced', onChampionshipAdvanced);
+            socket.off('championship_finished', onChampionshipFinished);
             socket.disconnect();
         };
      }
@@ -255,6 +263,13 @@ export default function App() {
                   setCurrentChampionshipRaceIndex(prev => prev + 1);
               }
               return; // Avança logo para a pista seguinte sem sair
+          }
+      }
+
+      if (action === 'finish' && activeEventId) {
+          if (lobbyState.find(p => p.socketId === socket.id)?.isHost) {
+              socket.emit('finish_championship');
+              return;
           }
       }
 

@@ -415,6 +415,20 @@ io.on('connection', (socket) => {
       }
   });
 
+  socket.on('finish_championship', () => {
+      const p = onlinePlayers.find(p => p.socketId === socket.id);
+      if (p && p.eventId && p.isHost) {
+          const roomPlayers = onlinePlayers.filter(x => x.eventId === p.eventId);
+          roomPlayers.forEach(x => {
+              x.status = 'in_lobby';
+              x.isReady = false;
+              x.setupReady = false;
+          });
+          io.to(p.eventId).emit('championship_finished');
+          io.to(p.eventId).emit('lobby_state', roomPlayers);
+      }
+  });
+
   socket.on('refresh_events', () => {
       io.emit('trigger_refresh_events');
   });

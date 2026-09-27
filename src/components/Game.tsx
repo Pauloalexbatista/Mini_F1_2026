@@ -423,11 +423,12 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
               setLiveStandings(standingsData);
           }
 
-          // LOCAL SAFETY TIMER: Starts for everyone to avoid lockouts if host transitions
+          // LOCAL SAFETY TIMER: Starts for everyone when the race winner finishes
           if (!raceFinished) {
-            const anyoneFinished = carsRef.current.some(c => !c.isBot && (c.finishTime !== null || c.givenUp));
+            // Trigger grace period as soon as ANY car (bot or human) completes the race
+            const anyoneFinished = carsRef.current.some(c => c.finishTime !== null || c.givenUp);
             if (anyoneFinished && raceGraceEndTimeRef.current === null) {
-                raceGraceEndTimeRef.current = now + 20000; // 20s grace since first finisher
+                raceGraceEndTimeRef.current = now + 25000; // 25s grace period
             }
             if (raceGraceEndTimeRef.current !== null && now > raceGraceEndTimeRef.current) {
                 console.log("SAFETY TIMEOUT - FORCING END");
