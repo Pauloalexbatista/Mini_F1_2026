@@ -188,14 +188,14 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   }, [startSequence, isSetupPhase]);
 
   useEffect(() => {
-     const onAllSetupReady = () => { setIsSetupPhase(false); setStartSequence(1); setForceRender(Date.now()); };
+     const onAllSetupReady = () => { setIsSetupPhase(false); setStartSequence(1); audio.playStartSequence(); setForceRender(Date.now()); };
      socket.on('all_setup_ready', onAllSetupReady);
      return () => { socket.off('all_setup_ready', onAllSetupReady); };
   }, []);
 
      useEffect(() => {
       const onLobbyState = (state: any[]) => {
-         carsRef.current.forEach(car => {
+         carsRef.current.forEach((car, carIndex) => {
             if (!car.isBot && !car.isLocal) {
                const stillInRoom = state.some(p => String(p.socketId) === String(car.id));
                if (!stillInRoom && car.finishTime === null) car.givenUp = true;
@@ -209,7 +209,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
    useEffect(() => {
      if (isSetupPhase) return;
      const onRemoteTick = (data: any) => {
-        const car = carsRef.current.find(c => c.id === data.id);
+        const car = carsRef.current.find(c => String(c.id) === String(data.id));
         if (car && !car.isLocal && !car.isBot) {
            car.remoteTarget = { x: data.x, y: data.y, a: data.a };
            car.vx = data.vx;
@@ -268,7 +268,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       const now = Date.now();
       try {
         if (startSequence >= 4) {
-          carsRef.current.forEach(car => {
+          carsRef.current.forEach((car, carIndex) => {
           const isFinished = car.finishTime !== null;
           if (isFinished) {
               car.vx = 0; car.vy = 0; car.angularVelocity = 0; car.throttle = 0; car.brake = 1;
@@ -355,12 +355,12 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
             }
           }
           
-          carsRef.current.forEach(other => { if (other.id > car.id) { const tD = Math.abs(car.currentWaypoint - other.currentWaypoint); if (!(tD > 500 && tD < spline.length-500)) { const dx = other.x-car.x, dy = other.y-car.y, d = Math.sqrt(dx*dx+dy*dy); if (d < 40 && d > 0.1) { const nx = dx/d, ny = dy/d, rV = {x: car.vx-other.vx, y: car.vy-other.vy}; if (Math.abs(rV.x*nx+rV.y*ny) > 200) { car.damage = Math.min(90, car.damage+5); other.damage = Math.min(90, other.damage+5); } const push=(40-d)*0.5; car.x-=nx*push; car.y-=ny*push; other.x+=nx*push; other.y+=ny*push; if (rV.x*nx+rV.y*ny > 0) { const imp = 0.75 * (rV.x*nx+rV.y*ny); car.vx-=imp*nx; car.vy-=imp*ny; other.vx+=imp*nx; other.vy+=imp*ny; } } } } });
+          carsRef.current.forEach((other, otherIdx) => { if (otherIdx > carIndex) { const tD = Math.abs(car.currentWaypoint - other.currentWaypoint); if (!(tD > 500 && tD < spline.length-500)) { const dx = other.x-car.x, dy = other.y-car.y, d = Math.sqrt(dx*dx+dy*dy); if (d < 40 && d > 0.1) { const nx = dx/d, ny = dy/d, rV = {x: car.vx-other.vx, y: car.vy-other.vy}; if (Math.abs(rV.x*nx+rV.y*ny) > 200) { car.damage = Math.min(90, car.damage+5); other.damage = Math.min(90, other.damage+5); } const push=(40-d)*0.5; car.x-=nx*push; car.y-=ny*push; other.x+=nx*push; other.y+=ny*push; if (rV.x*nx+rV.y*ny > 0) { const imp = 0.75 * (rV.x*nx+rV.y*ny); car.vx-=imp*nx; car.vy-=imp*ny; other.vx+=imp*nx; other.vy+=imp*ny; } } } } });
 
            if (!isFinished && (car.isLocal || car.isBot)) {
               updateCarPhysics(car, dt, surface);
               if (car.isLocal && socket.connected && now - lastEmitRef.current > 50) {
-                  socket.emit('player_tick', { id: car.id, x: car.x, y: car.y, a: car.angle, vx: car.vx, vy: car.vy, s: car.steer, b: car.brake, t: car.throttle, laps: car.laps, ft: car.finishTime, cw: car.currentWaypoint, bl: car.bestLapTime });
+                  socket.emit('player_tick', { id: String(car.id), x: car.x, y: car.y, a: car.angle, vx: car.vx, vy: car.vy, s: car.steer, b: car.brake, t: car.throttle, laps: car.laps, ft: car.finishTime, cw: car.currentWaypoint, bl: car.bestLapTime });
                   lastEmitRef.current = now;
               }
            }
@@ -376,7 +376,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
                  car.laps++; car.currentWaypoint = 0;
                  if (car.laps > 0 && car.currentLapStartTime) {
                     const lapT = now - car.currentLapStartTime; car.lastLapTime = lapT; if (!car.bestLapTime || lapT < car.bestLapTime) car.bestLapTime = lapT;
-                    if (lapT < globalBestLapRef.current) { globalBestLapRef.current = lapT; const pD = players.find(p => p.id === car.id); setFastLapPopup({ name: pD?.driverName || (car.isBot ? 'BOT' : 'P'+car.id), time: formatTime(lapT), color: car.color, isInitial: false }); setTimeout(() => setFastLapPopup(null), 4000); }
+                    if (lapT < globalBestLapRef.current) { globalBestLapRef.current = lapT; const pD = players.find(p => String(p.id) === String(car.id)); setFastLapPopup({ name: pD?.driverName || (car.isBot ? 'BOT' : 'P'+car.id), time: formatTime(lapT), color: car.color, isInitial: false }); setTimeout(() => setFastLapPopup(null), 4000); }
                  }
                  car.currentLapStartTime = now;
                  if (car.laps >= Number(totalLaps) && Number(totalLaps) > 0 && car.finishTime === null) { 
@@ -544,7 +544,36 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
                    ))}
                </div>
             </div>
-            {localSetupReady ? ( <div className="px-12 py-5 bg-gray-800 text-gray-400 font-black text-2xl animate-pulse">A AGUARDAR ADVERSÁRIO...</div> ) : ( <button onClick={() => { if (players.some(p => !p.isBot && !p.isLocal)) { setLocalSetupReady(true); socket.emit('setup_ready'); } else { setIsSetupPhase(false); setStartSequence(1); } }} className="px-12 py-5 bg-green-600 hover:bg-green-500 text-white font-black text-3xl italic rounded">IR PARA A PISTA</button> )}
+            {localSetupReady ? (
+               <div className="flex flex-col items-center gap-3">
+                  <div className="px-12 py-5 bg-gray-800 text-gray-400 font-black text-2xl animate-pulse rounded-xl">
+                     A AGUARDAR ADVERSÁRIO...
+                  </div>
+                  {isHost && (
+                     <button
+                        onClick={() => socket.emit('force_start_countdown')}
+                        className="text-xs text-yellow-400 hover:text-yellow-300 underline font-bold uppercase tracking-widest cursor-pointer"
+                     >
+                        Forçar Início da Corrida ➔
+                     </button>
+                  )}
+               </div>
+            ) : (
+               <button
+                  onClick={() => {
+                     if (players.some(p => !p.isBot && !p.isLocal)) {
+                        setLocalSetupReady(true);
+                        socket.emit('setup_ready');
+                     } else {
+                        setIsSetupPhase(false);
+                        setStartSequence(1);
+                     }
+                  }}
+                  className="px-12 py-5 bg-green-600 hover:bg-green-500 text-white font-black text-3xl italic rounded-xl shadow-lg cursor-pointer"
+               >
+                  IR PARA A PISTA
+               </button>
+            )}
           </div>
        )}
        {fastLapPopup && !raceFinished && startSequence >= 4 && ( <div className="absolute bottom-8 left-8 z-50 flex flex-col items-start animate-pulse"><div className="bg-black/90 px-8 py-3 border-t-4" style={{borderColor: fastLapPopup.color}}><span className="text-xl font-bold uppercase text-white">NOVA VOLTA RÁPIDA!</span><div className="text-5xl font-black text-white">{fastLapPopup.time}</div></div><div className="px-12 py-2 text-black font-black uppercase text-2xl" style={{backgroundColor: fastLapPopup.color}}>{fastLapPopup.name}</div></div> )}
@@ -662,7 +691,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
                  return scoreB - scoreA;
             });
             currentRes = sorted.map((c, i) => {
-               const pDef = players.find(p => p.id === c.id);
+               const pDef = players.find(p => String(p.id) === String(c.id));
                const F1_PTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
                return { 
                  playerId: c.id, 

@@ -306,16 +306,39 @@ io.on('connection', (socket) => {
   socket.on('join_event', (eventId) => {
       const p = onlinePlayers.find(x => x.socketId === socket.id);
       if (p) {
-          if (p.eventId) socket.leave(p.eventId); // leave old
+          if (p.eventId && p.eventId !== eventId) {
+              const oldEvt = p.eventId;
+              socket.leave(oldEvt);
+              p.isHost = false;
+              handleEventCleanup(oldEvt);
+          }
           
           p.eventId = eventId;
           p.isReady = false;
           p.setupReady = false; // Reset setup readiness on join
           p.status = 'in_lobby';
           socket.join(eventId);
+
+          const roomPlayers = onlinePlayers.filter(x => x.eventId === eventId);
+          // O primeiro na sala (ou se nenhum for host) torna-se o Host!
+          if (!roomPlayers.some(x => x.isHost)) {
+              p.isHost = true;
+          } else {
+              p.isHost = false;
+          }
           
           io.emit('global_roster', onlinePlayers);
-          io.to(eventId).emit('lobby_state', onlinePlayers.filter(x => x.eventId === eventId));
+          io.to(eventId).emit('lobby_state', roomPlayers);
+      }
+  });
+
+  // Permite ao Host for�ar a largada caso algu�m fique pendurado no setup
+  socket.on('force_start_countdown', () => {
+      const p = onlinePlayers.find(x => x.socketId === socket.id);
+      if (p && p.eventId && p.isHost) {
+          const roomPlayers = onlinePlayers.filter(x => x.eventId === p.eventId);
+          roomPlayers.forEach(x => { x.setupReady = false; });
+          io.to(p.eventId).emit('all_setup_ready');
       }
   });
 
@@ -379,7 +402,7 @@ io.on('connection', (socket) => {
               x.setupReady = false; // Ensure reset before race starts
           });
           console.log(`[EVENT] Starting race for event ${p.eventId}. Players: ${roomPlayers.length}`);
-          io.to(p.eventId).emit('race_started', data);
+          io.to(p.eventId).emit('race_started', { ...data, roomPlayers });
           // Notify all clients to refresh their events list (event is now gone)
           io.emit('trigger_refresh_events');
       }

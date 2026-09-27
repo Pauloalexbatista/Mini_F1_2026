@@ -175,6 +175,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
     } catch(e) { /* silent */ }
   };
   
+  const isHostPlayer = !activeEventId || lobbyState.find(p => p.socketId === socket.id)?.isHost === true;
   const ALL_TRACKS = [...tracks, ...DEFAULT_TRACKS.filter(sysT => !tracks.some(dbT => dbT.id === sysT.id))];
   const tracksAreReady = ALL_TRACKS.length > 0;
 
@@ -283,7 +284,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                    // Online but no event = must create/join an event first
                    (globalRoster.length > 0 && !activeEventId) ||
                    // In a multiplayer lobby: wait for all humans to be ready
-                   (!!activeEventId && lobbyState.length > 0 && !lobbyState.every((p: any) => p.isReady))
+                   (!!activeEventId && (!isHostPlayer || lobbyState.length < 1 || !lobbyState.every((p: any) => p.isReady)))
                  }
                  className="w-full sm:flex-1 bg-[#E10600] hover:bg-red-700 text-white disabled:bg-gray-800 disabled:text-gray-500 py-3 sm:py-5 px-6 rounded text-sm sm:text-base font-black italic tracking-widest uppercase transition-colors flex items-center justify-center gap-3 disabled:cursor-not-allowed group relative overflow-hidden"
               >
@@ -292,10 +293,12 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                  ) : selectedTracks.length === 0 ? (
                    'SELECIONE UMA PISTA...'
                  ) : activeEventId ? (
-                   lobbyState.length > 0 && lobbyState.every((p: any) => p.isReady) ? (
+                   !isHostPlayer ? (
+                     'A AGUARDAR QUE O HOST LANCE A CORRIDA...'
+                   ) : lobbyState.length > 0 && lobbyState.every((p: any) => p.isReady) ? (
                      <>LANÇAR CORRIDA <svg className="w-4 h-4 ml-2 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></>
                    ) : (
-                     'A AGUARDAR PILOTOS...'
+                     'A AGUARDAR PILOTOS PRONTOS...'
                    )
                  ) : (
                    <>IR PARA A <span className="hidden sm:inline ml-1">CORRIDA</span> <svg className="w-4 h-4 ml-2 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></>

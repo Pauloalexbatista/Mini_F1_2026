@@ -169,7 +169,8 @@ export default function App() {
             }
 
             if (dbTracksRef.current.length > 0) {
-               setRacePlayers([...activePlayersRef.current]);
+               const lineup = buildGrid(data && data.roomPlayers ? data.roomPlayers : undefined);
+               setRacePlayers(lineup);
                setAppState('playing');
             } else {
                console.error("Critical: Race starting but no tracks loaded!");
@@ -319,73 +320,75 @@ export default function App() {
       }
   };
 
-  // Reconstrução da grelha de Partida usando estritamente o Lobby Online (Sockets)
-  let activePlayers: PlayerConfig[] = [];
-  
-  if (lobbyState.length > 0) {
-      activePlayers = lobbyState.map((p) => {
-          const isLocal = p.socketId === socket.id;
-          return {
-              id: p.socketId,
-              isBot: false,
-              isLocal: isLocal,
-              controls: isLocal ? (players[0]?.controls || p.controls) : p.controls,
-              driverName: p.driverName,
-              teamName: p.teamName,
-              color: isLocal ? (players[0]?.color || p.color) : p.color,
-              color2: isLocal ? (players[0]?.color2 || p.color2) : p.color2,
-              helmetColor: isLocal ? (players[0]?.helmetColor || p.helmetColor) : p.helmetColor,
-              difficulty: 1.0,
-              socketId: p.socketId,
-              isReady: p.isReady
-          };
-      });
-  } else if (user || players.length > 0) {
-      // Fallback local se estiver a ligar
-      activePlayers.push({
-           id: 1,
-           isBot: false,
-           isLocal: true,
-           controls: players[0]?.controls || DEFAULT_CONTROLS[0],
-           driverName: players[0]?.driverName || user?.pilot_name || defaultGuestName,
-           teamName: 'Garagem Pessoal',
-           color: players[0]?.color || user?.primary_color || '#E10600',
-           color2: players[0]?.color2 || user?.secondary_color || '#000000',
-           helmetColor: players[0]?.helmetColor || user?.helmet_color || '#FFDD00',
-           difficulty: 1.0,
-           socketId: undefined,
-           isReady: true
-      });
-  }
-
-  // Preenchimento de IA Bots para manter a Grelha Cheia (10 Carros)
-  if (activePlayers.length > 0 && activePlayers.length < 10) {
-      const neededBots = 10 - activePlayers.length;
-      
-      const BOT_NAMES_DYN = ['A. Silva', 'M. Verstappen', 'L. Hamilton', 'F. Alonso', 'C. Leclerc', 'L. Norris', 'C. Sainz', 'G. Russell', 'O. Piastri', 'S. Perez', 'A. Albon', 'Y. Tsunoda', 'N. Hulkenberg', 'V. Bottas', 'E. Ocon', 'P. Gasly', 'K. Magnussen', 'Z. Guanyu', 'L. Stroll', 'L. Lawson', 'A. Senna'];
-      const takenNames = activePlayers.map(p => p.driverName);
-      const availableNames = BOT_NAMES_DYN.filter(n => !takenNames.includes(n)).sort(() => Math.random() - 0.5);
-
-      for (let i = 0; i < neededBots; i++) {
-          const hue1 = Math.floor(Math.random() * 360);
-          const hue2 = (hue1 + 180 + Math.floor(Math.random() * 60 - 30)) % 360;
-          const hueHelmet = Math.floor(Math.random() * 360);
-
-          activePlayers.push({
-             id: 10 + i, // IDs acima de 10 para evitar colisões
-             isBot: true,
-             controls: { up: '', down: '', left: '', right: '' },
-             driverName: availableNames[i] || `BOT ${i+1}`,
-             teamName: 'AI Racing Team',
-             color: `hsl(${hue1}, 85%, 45%)`,
-             color2: `hsl(${hue2}, 80%, 30%)`,
-             helmetColor: `hsl(${hueHelmet}, 90%, 55%)`,
-             difficulty: 0.88 + (Math.random() * 0.12), // Difficulty 0.88 - 1.00
-             socketId: `bot_${i}`,
-             isReady: true 
+  // Reconstrução determinística da grelha de Partida
+  const buildGrid = (roomPlayers?: any[]): PlayerConfig[] => {
+      const sourcePlayers = (roomPlayers && roomPlayers.length > 0) ? roomPlayers : lobbyState;
+      let grid: PlayerConfig[] = [];
+      if (sourcePlayers.length > 0) {
+          grid = sourcePlayers.map((p: any) => {
+              const isLocal = p.socketId === socket.id;
+              return {
+                  id: String(p.socketId),
+                  isBot: false,
+                  isLocal: isLocal,
+                  controls: isLocal ? (players[0]?.controls || p.controls || DEFAULT_CONTROLS[0]) : p.controls,
+                  driverName: p.driverName,
+                  teamName: p.teamName,
+                  color: isLocal ? (players[0]?.color || p.color) : p.color,
+                  color2: isLocal ? (players[0]?.color2 || p.color2) : p.color2,
+                  helmetColor: isLocal ? (players[0]?.helmetColor || p.helmetColor) : p.helmetColor,
+                  difficulty: 1.0,
+                  socketId: p.socketId,
+                  isReady: p.isReady
+              };
+          });
+      } else if (user || players.length > 0) {
+          grid.push({
+               id: 1,
+               isBot: false,
+               isLocal: true,
+               controls: players[0]?.controls || DEFAULT_CONTROLS[0],
+               driverName: players[0]?.driverName || user?.pilot_name || defaultGuestName,
+               teamName: 'Garagem Pessoal',
+               color: players[0]?.color || user?.primary_color || '#E10600',
+               color2: players[0]?.color2 || user?.secondary_color || '#000000',
+               helmetColor: players[0]?.helmetColor || user?.helmet_color || '#FFDD00',
+               difficulty: 1.0,
+               socketId: undefined,
+               isReady: true
           });
       }
-  }
+
+      if (grid.length > 0 && grid.length < 10) {
+          const neededBots = 10 - grid.length;
+          const BOT_NAMES = ['A. Silva', 'M. Verstappen', 'L. Hamilton', 'F. Alonso', 'C. Leclerc', 'L. Norris', 'C. Sainz', 'G. Russell', 'O. Piastri', 'S. Perez', 'A. Albon', 'Y. Tsunoda', 'N. Hulkenberg', 'V. Bottas', 'E. Ocon', 'P. Gasly', 'K. Magnussen', 'Z. Guanyu', 'L. Stroll', 'L. Lawson'];
+          const takenNames = grid.map(p => p.driverName);
+          const availableNames = BOT_NAMES.filter(n => !takenNames.includes(n));
+
+          for (let i = 0; i < neededBots; i++) {
+              const hue1 = (i * 47) % 360;
+              const hue2 = (hue1 + 180) % 360;
+              const hueHelmet = (i * 83) % 360;
+
+              grid.push({
+                 id: 10 + i,
+                 isBot: true,
+                 controls: { up: '', down: '', left: '', right: '' },
+                 driverName: availableNames[i] || `BOT ${i+1}`,
+                 teamName: 'AI Racing Team',
+                 color: `hsl(${hue1}, 85%, 45%)`,
+                 color2: `hsl(${hue2}, 80%, 30%)`,
+                 helmetColor: `hsl(${hueHelmet}, 90%, 55%)`,
+                 difficulty: 0.90,
+                 socketId: `bot_${i}`,
+                 isReady: true 
+              });
+          }
+      }
+      return grid;
+  };
+
+  let activePlayers: PlayerConfig[] = buildGrid();
 
   // Always keep ref in sync with latest activePlayers (used by socket handlers)
   activePlayersRef.current = activePlayers;
