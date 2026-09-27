@@ -30,7 +30,9 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   const [raceFinished, setRaceFinished] = useState(false);
   const [startSequence, setStartSequence] = useState(isSetupPhase ? 0 : 1); 
   const [, setForceRender] = useState(0);
-  const [cameraModeUI, setCameraModeUI] = useState<'CENTRAL' | 'DYNAMIC' | 'QUADRANTS'>('CENTRAL');
+  const [cameraModeUI, setCameraModeUI] = useState<'CHASE' | 'CENTRAL' | 'DYNAMIC'>('CHASE');
+  const [camToast, setCamToast] = useState<string | null>(null);
+  const camToastTimeoutRef = useRef<any>(null);
 
   const [finalClassification, setFinalClassification] = useState<RaceResultEntry[] | null>(null);
 
@@ -68,7 +70,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   const firstFinishTimeRef = useRef<number | null>(null);
   const allHumansFinishedTimeRef = useRef<number | null>(null);
   const cameraRef = useRef<{x: number, y: number, scale: number} | null>(null);
-  const cameraModeRef = useRef<'CENTRAL' | 'DYNAMIC' | 'QUADRANTS'>('CENTRAL');
+  const cameraModeRef = useRef<'CHASE' | 'CENTRAL' | 'DYNAMIC'>('CHASE');
+  const chaseAngleRef = useRef<number>(0);
   const quadOffsetRef = useRef<{x: number, y: number}>({x: 0, y: 0});
   const skidMarksRef = useRef<{x: number, y: number, a: number, w: number}[]>([]);
   const camAngleRef = useRef<number>(0);
@@ -232,7 +235,21 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
     const down = (e: KeyboardEvent) => { 
        keysRef.current[e.code] = true;
        const cameraKeys = players.filter(p => !p.isBot).map(p => p.controls?.camera || 'KeyC');
-       if (cameraKeys.includes(e.code)) { const next = cameraModeRef.current === 'CENTRAL' ? 'DYNAMIC' : (cameraModeRef.current === 'DYNAMIC' ? 'QUADRANTS' : 'CENTRAL'); cameraModeRef.current = next; setCameraModeUI(next); }
+       if (cameraKeys.includes(e.code)) {
+          const modes: ('CHASE' | 'CENTRAL' | 'DYNAMIC')[] = ['CHASE', 'CENTRAL', 'DYNAMIC'];
+          const curIdx = modes.indexOf(cameraModeRef.current);
+          const next = modes[(curIdx + 1) % modes.length];
+          cameraModeRef.current = next;
+          setCameraModeUI(next);
+          const labels: Record<string, string> = {
+            'CHASE': 'Atrás do Carro',
+            'CENTRAL': 'Vista de Topo',
+            'DYNAMIC': 'Dinâmica'
+          };
+          setCamToast(labels[next]);
+          if (camToastTimeoutRef.current) clearTimeout(camToastTimeoutRef.current);
+          camToastTimeoutRef.current = setTimeout(() => setCamToast(null), 2000);
+       }
     };
     const up = (e: KeyboardEvent) => { keysRef.current[e.code] = false; };
     window.addEventListener('keydown', down); window.addEventListener('keyup', up);
@@ -454,18 +471,43 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       let aDiff = Math.atan2(Math.sin(lookA-camAngleRef.current), Math.cos(lookA-camAngleRef.current)); if (spd > 2) camAngleRef.current += aDiff * 0.05;
 
       let offX = 0, offY = 0;
-      if (cameraModeRef.current === 'DYNAMIC' && startSequence >= 4) { offX = -Math.cos(camAngleRef.current)*(Math.min(1, spd/1000)*GAME_WIDTH*0.35); offY = -Math.sin(camAngleRef.current)*(Math.min(1, spd/1000)*GAME_HEIGHT*0.35); }
-      else if (cameraModeRef.current === 'QUADRANTS' && startSequence >= 4) { offX = -Math.cos(camAngleRef.current)*GAME_WIDTH*0.25; offY = -Math.sin(camAngleRef.current)*GAME_HEIGHT*0.25; }
+      if (cameraModeRef.current === 'DYNAMIC' && startSequence >= 4) {
+        offX = -Math.cos(camAngleRef.current)*(Math.min(1, spd/1000)*GAME_WIDTH*0.35);
+        offY = -Math.sin(camAngleRef.current)*(Math.min(1, spd/1000)*GAME_HEIGHT*0.35);
+      }
       
       if (!cameraRef.current) cameraRef.current = { x: mainCar.x, y: mainCar.y, scale: 0.08 };
-      cameraRef.current.x += (mainCar.x - cameraRef.current.x) * 0.3; cameraRef.current.y += (mainCar.y - cameraRef.current.y) * 0.3;
+      cameraRef.current.x += (mainCar.x - cameraRef.current.x) * 0.3;
+      cameraRef.current.y += (mainCar.y - cameraRef.current.y) * 0.3;
       cameraRef.current.scale += (targetScale - cameraRef.current.scale) * 0.02;
-      quadOffsetRef.current.x += (offX - quadOffsetRef.current.x) * 0.05; quadOffsetRef.current.y += (offY - quadOffsetRef.current.y) * 0.05;
+      quadOffsetRef.current.x += (offX - quadOffsetRef.current.x) * 0.05;
+      quadOffsetRef.current.y += (offY - quadOffsetRef.current.y) * 0.05;
+
+      let camRot = 0;
+      let anchorX = GAME_WIDTH / 2;
+      let anchorY = GAME_HEIGHT / 2;
+
+      if (cameraModeRef.current === 'CHASE') {
+        if (startSequence >= 2 && !raceFinished) {
+          const aDiffChase = Math.atan2(Math.sin(mainCar.angle - chaseAngleRef.current), Math.cos(mainCar.angle - chaseAngleRef.current));
+          chaseAngleRef.current += aDiffChase * 0.12;
+          camRot = -chaseAngleRef.current - Math.PI / 2;
+          anchorY = GAME_HEIGHT * 0.68;
+        } else {
+          chaseAngleRef.current = mainCar.angle;
+        }
+      } else if (cameraModeRef.current === 'DYNAMIC' && startSequence >= 4) {
+        anchorX += quadOffsetRef.current.x;
+        anchorY += quadOffsetRef.current.y;
+      }
 
       ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       ctx.fillStyle = '#315722'; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
       ctx.save();
-      ctx.translate(Math.round(GAME_WIDTH/2+quadOffsetRef.current.x), Math.round(GAME_HEIGHT/2+quadOffsetRef.current.y)); ctx.scale(cameraRef.current.scale, cameraRef.current.scale); ctx.translate(Math.round(-cameraRef.current.x), Math.round(-cameraRef.current.y));
+      ctx.translate(Math.round(anchorX), Math.round(anchorY));
+      if (camRot !== 0) ctx.rotate(camRot);
+      ctx.scale(cameraRef.current.scale, cameraRef.current.scale);
+      ctx.translate(Math.round(-cameraRef.current.x), Math.round(-cameraRef.current.y));
       drawTrack(ctx, spline, pitSpline, false); drawEnvironments(ctx, spline, pitSpline, false);
       skidMarksRef.current.forEach(sm => { ctx.save(); ctx.translate(sm.x, sm.y); ctx.rotate(sm.a); ctx.fillStyle='rgba(10,10,10,0.5)'; ctx.fillRect(-sm.w/2, -5, sm.w, 10); ctx.restore(); });
       carsRef.current.forEach(c => { if (spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); ctx.restore(); });
@@ -641,7 +683,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
                      </div>
                      <div className="flex items-center gap-2">
                         <kbd className="w-8 h-8 rounded bg-yellow-400 text-black font-black flex items-center justify-center text-sm shadow-[0_2px_0_#b80] uppercase">{c.camera}</kbd>
-                        <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">CAM</span>
+                        <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">{`CAM (${cameraModeUI === 'CHASE' ? 'ATRÁS' : cameraModeUI === 'CENTRAL' ? 'FIXO' : 'DINÂMICO'})`}</span>
                      </div>
                   </div>
                 );
@@ -676,6 +718,12 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
             </svg>
          </div>
       )}
+       {camToast && (
+          <div className="fixed top-24 left-1/2 -translate-x-1/2 bg-yellow-400 text-black font-black px-6 py-2 rounded-full uppercase tracking-widest text-sm shadow-2xl z-[70] animate-bounce border-2 border-black flex items-center gap-2 pointer-events-none">
+             <span>🎥</span>
+             <span>CÂMARA: {camToast}</span>
+          </div>
+       )}
       {!raceFinished && ( <button onClick={() => onBackToMenu([], 'quit')} className="fixed top-4 right-4 bg-red-600 text-white font-bold px-4 py-2 hover:bg-red-700 z-50 rounded-lg">DESISTIR</button> )}
       {raceFinished && (() => {
         let currentRes: RaceResultEntry[] = [];
