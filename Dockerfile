@@ -2,6 +2,9 @@ FROM node:20-bookworm
 
 WORKDIR /app
 
+# Ensure persistent server_data directory exists
+RUN mkdir -p /app/server_data
+
 # Copy dependency files first to maximize Docker layer caching
 COPY package.json package-lock.json* ./
 

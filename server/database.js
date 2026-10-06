@@ -11,11 +11,30 @@ import fs from 'fs';
 // Se o Volume do Coolify existir (Produção Cloud), guardamos a Base de Dados na "Caixa Forte".
 // Caso contrário (no PC local do Paulo), guardamos ao lado do ficheiro como habitualmente.
 const COOLIFY_VOLUME_PATH = '/app/server_data';
-const isCoolify = fs.existsSync(COOLIFY_VOLUME_PATH) || process.env.NODE_ENV === 'production';
-const dbFolder = isCoolify ? COOLIFY_VOLUME_PATH : __dirname;
+let dbFolder = __dirname;
+
+if (fs.existsSync(COOLIFY_VOLUME_PATH)) {
+  dbFolder = COOLIFY_VOLUME_PATH;
+} else if (process.env.NODE_ENV === 'production') {
+  try {
+    fs.mkdirSync(COOLIFY_VOLUME_PATH, { recursive: true });
+    dbFolder = COOLIFY_VOLUME_PATH;
+  } catch (err) {
+    console.warn('[F1 Engine] Falha ao criar pasta de volume, fallback para __dirname:', err.message);
+    dbFolder = __dirname;
+  }
+}
+
+if (!fs.existsSync(dbFolder)) {
+  try {
+    fs.mkdirSync(dbFolder, { recursive: true });
+  } catch (e) {
+    dbFolder = __dirname;
+  }
+}
 
 const dbFile = path.resolve(dbFolder, 'database.sqlite');
-console.log(`[F1 Engine] A iniciar ligação à Base de Dados SQLite em: ${dbFile}`);
+console.log(`[F1 Engine] A iniciar liga��o � Base de Dados SQLite em: ${dbFile}`);
 export async function initDB() {
   const db = await open({
     filename: dbFile,

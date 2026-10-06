@@ -23,6 +23,9 @@ const JWT_SECRET = process.env.JWT_SECRET || 'f1_2026_super_secret_key_omega';
 app.use(cors());
 app.use(express.json());
 
+app.get('/health', (req, res) => res.status(200).send('OK'));
+app.get('/api/health', (req, res) => res.status(200).json({ status: 'ok', uptime: process.uptime() }));
+
 let db;
 
 // Authentication Middleware
@@ -500,7 +503,7 @@ async function startServer() {
       console.error('Failed to purge open events from DB:', e);
   }
 
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`F1 2026 API & WSS Server running on http://localhost:${PORT}`);
   });
 }
