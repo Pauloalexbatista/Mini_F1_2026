@@ -504,8 +504,24 @@ async function startServer() {
   }
 
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`F1 2026 API & WSS Server running on http://localhost:${PORT}`);
+    console.log(`F1 2026 API & WSS Server running on http://0.0.0.0:${PORT}`);
   });
+
+  // DUAL-PORT: Abre tamb�m na porta 80 caso o Traefik/Coolify encaminhe por defeito para a porta 80!
+  if (String(PORT) !== '80') {
+    try {
+      const server80 = createServer(app);
+      io.attach(server80);
+      server80.listen(80, '0.0.0.0', () => {
+        console.log('F1 2026 ativo tamb�m na porta 80 (Dual-Port para Traefik)');
+      });
+      server80.on('error', (err) => {
+        console.log('[Dual-Port] Nota porta 80:', err.message);
+      });
+    } catch (e) {
+      console.log('[Dual-Port] Ignorado:', e.message);
+    }
+  }
 }
 
 startServer();
