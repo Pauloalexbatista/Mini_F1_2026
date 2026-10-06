@@ -22,7 +22,7 @@ COPY . .
 RUN npm run build
 
 # Securely expose the unified server port
-EXPOSE 3000
+EXPOSE 3000 80
 
 # Start the Node.js API which also acts as the Frontend file server
 CMD ["npm", "start"]
