@@ -447,6 +447,13 @@ io.on('connection', (socket) => {
       }
   });
 
+  socket.on('host_bots_tick', (botsData) => {
+      const p = onlinePlayers.find(p => p.socketId === socket.id);
+      if (p && p.eventId && p.isHost) {
+          socket.to(p.eventId).emit('remote_bots_tick', botsData);
+      }
+  });
+
   // Sair de um evento e voltar à box
   socket.on('leave_event', async () => {
       const p = onlinePlayers.find(x => x.socketId === socket.id);

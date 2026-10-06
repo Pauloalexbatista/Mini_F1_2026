@@ -31,6 +31,27 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   const [startSequence, setStartSequence] = useState(isSetupPhase ? 0 : 1); 
   const [, setForceRender] = useState(0);
   const [cameraModeUI, setCameraModeUI] = useState<'CHASE' | 'CENTRAL' | 'DYNAMIC'>('CHASE');
+  const [touchActive, setTouchActive] = useState<{ up: boolean; down: boolean; left: boolean; right: boolean }>({
+    up: false,
+    down: false,
+    left: false,
+    right: false
+  });
+
+  const handleTouchControl = (dir: 'up' | 'down' | 'left' | 'right', isPressed: boolean) => {
+    setTouchActive(prev => ({ ...prev, [dir]: isPressed }));
+    const localPlayer = players.find(p => !p.isBot && p.isLocal) || players[0];
+    const keyMap = {
+      up: localPlayer?.controls?.up || 'ArrowUp',
+      down: localPlayer?.controls?.down || 'ArrowDown',
+      left: localPlayer?.controls?.left || 'ArrowLeft',
+      right: localPlayer?.controls?.right || 'ArrowRight'
+    };
+    const key = keyMap[dir];
+    if (key) {
+      keysRef.current[key] = isPressed;
+    }
+  };
   const [camToast, setCamToast] = useState<string | null>(null);
   const camToastTimeoutRef = useRef<any>(null);
 
@@ -76,6 +97,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   const skidMarksRef = useRef<{x: number, y: number, a: number, w: number}[]>([]);
   const camAngleRef = useRef<number>(0);
   const lastEmitRef = useRef<number>(0);
+  const lastBotsEmitRef = useRef<number>(0);
   
   const rawTrack = track;
   const spline = React.useMemo(() => rawTrack?.nodes || [], [rawTrack]);
@@ -108,6 +130,39 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
     };
     socket.on('live_standings', onLiveStandings);
     return () => { socket.off('live_standings', onLiveStandings); };
+  }, [isHost]);
+
+  useEffect(() => {
+    if (isHost) return;
+    const onRemoteBotsTick = (bots: any[]) => {
+        if (!Array.isArray(bots)) return;
+        bots.forEach(b => {
+            const car = carsRef.current.find(c => String(c.id) === String(b.id));
+            if (car && car.isBot) {
+                if (!car.remoteTarget) {
+                    car.remoteTarget = { x: b.x, y: b.y, a: b.a };
+                } else {
+                    car.remoteTarget.x = b.x;
+                    car.remoteTarget.y = b.y;
+                    car.remoteTarget.a = b.a;
+                }
+                if (Math.hypot(car.x - b.x, car.y - b.y) > 250) {
+                    car.x = b.x;
+                    car.y = b.y;
+                    car.angle = b.a;
+                }
+                car.vx = b.vx || 0;
+                car.vy = b.vy || 0;
+                if (b.laps !== undefined) car.laps = b.laps;
+                if (b.ft !== undefined) car.finishTime = b.ft;
+                if (b.cw !== undefined) car.currentWaypoint = b.cw;
+                if (b.bl !== undefined) car.bestLapTime = b.bl;
+                if (b.d !== undefined) car.damage = b.d;
+            }
+        });
+    };
+    socket.on('remote_bots_tick', onRemoteBotsTick);
+    return () => { socket.off('remote_bots_tick', onRemoteBotsTick); };
   }, [isHost]);
 
   useEffect(() => {
@@ -214,12 +269,23 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
      const onRemoteTick = (data: any) => {
         const car = carsRef.current.find(c => String(c.id) === String(data.id));
         if (car && !car.isLocal && !car.isBot) {
-           car.remoteTarget = { x: data.x, y: data.y, a: data.a };
-           car.vx = data.vx;
-           car.vy = data.vy;
-           car.steer = data.s;
-           car.brake = data.b;
-           car.throttle = data.t;
+           if (!car.remoteTarget) {
+               car.remoteTarget = { x: data.x, y: data.y, a: data.a };
+           } else {
+               car.remoteTarget.x = data.x;
+               car.remoteTarget.y = data.y;
+               car.remoteTarget.a = data.a;
+           }
+           if (Math.hypot(car.x - data.x, car.y - data.y) > 250) {
+               car.x = data.x;
+               car.y = data.y;
+               car.angle = data.a;
+           }
+           car.vx = data.vx || 0;
+           car.vy = data.vy || 0;
+           car.steer = data.s || 0;
+           car.brake = data.b || 0;
+           car.throttle = data.t || 0;
            // CRITICAL SYNC: Update Laps and Finish Time from Remote Player
            if (data.laps !== undefined) car.laps = data.laps;
            if (data.ft !== undefined) car.finishTime = data.ft;
@@ -274,8 +340,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
 
   useEffect(() => {
     if (!canvasRef.current) return;
-    canvasRef.current.width = window.innerWidth; canvasRef.current.height = window.innerHeight;
-    let animationFrameId: number; let lastTime = performance.now();
+    canvasRef.current.width = window.innerWidth; canvasRef.current.height = window.innerHeight;    const handleResize = () => {      if (canvasRef.current) {        canvasRef.current.width = window.innerWidth;        canvasRef.current.height = window.innerHeight;      }    };    window.addEventListener('resize', handleResize);    let animationFrameId: number; let lastTime = performance.now();
     const pitSpline = (rawTrack?.pitNodes && rawTrack.pitNodes.length > 0) ? rawTrack.pitNodes : null;
 
     const update = (time: number) => {
@@ -350,18 +415,38 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           car.throttle = 0; car.brake = 0; car.steer = 0;
           const speed_val = Math.sqrt(car.vx*car.vx + car.vy*car.vy);
           if (car.isBot) {
-            const lookA = Math.floor(10 + (speed_val / 15)); 
-            let tArr = spline, myIdx = closestIndex, useL = true;
-            if (isInPitLane && pitSpline) { tArr = pitSpline; useL = false; let mD = Infinity; for (let i=0; i<pitSpline.length; i++) { const dSq = (car.x-pitSpline[i].x)**2 + (car.y-pitSpline[i].y)**2; if (dSq < mD) { mD=dSq; myIdx=i; } } }
-            const tIdx = useL ? (myIdx + lookA) % tArr.length : Math.min(myIdx + lookA, tArr.length - 1);
-            const rawT = tArr[tIdx] || { x: 0, y: 0 };
-            const tAngle = Math.atan2(rawT.y - car.y, rawT.x - car.x); let aD = Math.atan2(Math.sin(tAngle-car.angle), Math.cos(tAngle-car.angle));
-            car.steer = Math.max(-1, Math.min(1, aD * Math.max(1.5, 4.0 - (speed_val/120))));
-            const sSpd = (surface==='GRASS') ? car.maxSpeed*0.3 : car.maxSpeed * Math.max(0.2, 1.0 - (Math.max(0, Math.abs(aD)-0.05)*3.5));
-            if (speed_val < sSpd - 5) car.throttle = 1.0; else if (speed_val > sSpd + 15) car.brake = Math.min(1, (speed_val-sSpd)/100);
+            if (isHost) {
+              const lookA = Math.floor(10 + (speed_val / 15)); 
+              let tArr = spline, myIdx = closestIndex, useL = true;
+              if (isInPitLane && pitSpline) { tArr = pitSpline; useL = false; let mD = Infinity; for (let i=0; i<pitSpline.length; i++) { const dSq = (car.x-pitSpline[i].x)**2 + (car.y-pitSpline[i].y)**2; if (dSq < mD) { mD=dSq; myIdx=i; } } }
+              const tIdx = useL ? (myIdx + lookA) % tArr.length : Math.min(myIdx + lookA, tArr.length - 1);
+              const rawT = tArr[tIdx] || { x: 0, y: 0 };
+              const tAngle = Math.atan2(rawT.y - car.y, rawT.x - car.x); let aD = Math.atan2(Math.sin(tAngle-car.angle), Math.cos(tAngle-car.angle));
+              car.steer = Math.max(-1, Math.min(1, aD * Math.max(1.5, 4.0 - (speed_val/120))));
+              const sSpd = (surface==='GRASS') ? car.maxSpeed*0.3 : car.maxSpeed * Math.max(0.2, 1.0 - (Math.max(0, Math.abs(aD)-0.05)*3.5));
+              if (speed_val < sSpd - 5) car.throttle = 1.0; else if (speed_val > sSpd + 15) car.brake = Math.min(1, (speed_val-sSpd)/100);
+            } else if (car.remoteTarget) {
+              // Dead reckoning for remote bots on client
+              car.remoteTarget.x += car.vx * dt;
+              car.remoteTarget.y += car.vy * dt;
+              const lerpRate = Math.min(1, dt * 15);
+              car.x += (car.remoteTarget.x - car.x) * lerpRate;
+              car.y += (car.remoteTarget.y - car.y) * lerpRate;
+              let ad = Math.atan2(Math.sin(car.remoteTarget.a-car.angle), Math.cos(car.remoteTarget.a-car.angle));
+              car.angle += ad * lerpRate;
+            }
           } else if (car.isLocal) {
             if (car.controls) { if (keysRef.current[car.controls.up]) car.throttle = (surface === 'GRASS' ? 0.4 : 1.0); if (keysRef.current[car.controls.down]) car.brake = 1.0; const sL = Math.max(0.70, 1.0 - (speed_val/1200)); if (keysRef.current[car.controls.left]) car.steer = -sL; if (keysRef.current[car.controls.right]) car.steer = sL; }
-          } else if (car.remoteTarget) { car.x += (car.remoteTarget.x - car.x) * 0.3; car.y += (car.remoteTarget.y - car.y) * 0.3; let ad = Math.atan2(Math.sin(car.remoteTarget.a-car.angle), Math.cos(car.remoteTarget.a-car.angle)); car.angle += ad * 0.3; }
+          } else if (car.remoteTarget) {
+            // Dead reckoning for remote players
+            car.remoteTarget.x += car.vx * dt;
+            car.remoteTarget.y += car.vy * dt;
+            const lerpRate = Math.min(1, dt * 15);
+            car.x += (car.remoteTarget.x - car.x) * lerpRate;
+            car.y += (car.remoteTarget.y - car.y) * lerpRate;
+            let ad = Math.atan2(Math.sin(car.remoteTarget.a-car.angle), Math.cos(car.remoteTarget.a-car.angle));
+            car.angle += ad * lerpRate;
+          }
 
           if (surface === 'GRASS') { car.damage = Math.min(90, car.damage + 0.01); if (speed_val > car.maxSpeed * 0.6) { car.vx *= 0.98; car.vy *= 0.98; } }
           if (isInPitLane && pitSpline && closestPitIndex >= 0) {
@@ -374,7 +459,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           
           carsRef.current.forEach((other, otherIdx) => { if (otherIdx > carIndex) { const tD = Math.abs(car.currentWaypoint - other.currentWaypoint); if (!(tD > 500 && tD < spline.length-500)) { const dx = other.x-car.x, dy = other.y-car.y, d = Math.sqrt(dx*dx+dy*dy); if (d < 40 && d > 0.1) { const nx = dx/d, ny = dy/d, rV = {x: car.vx-other.vx, y: car.vy-other.vy}; if (Math.abs(rV.x*nx+rV.y*ny) > 200) { car.damage = Math.min(90, car.damage+5); other.damage = Math.min(90, other.damage+5); } const push=(40-d)*0.5; car.x-=nx*push; car.y-=ny*push; other.x+=nx*push; other.y+=ny*push; if (rV.x*nx+rV.y*ny > 0) { const imp = 0.75 * (rV.x*nx+rV.y*ny); car.vx-=imp*nx; car.vy-=imp*ny; other.vx+=imp*nx; other.vy+=imp*ny; } } } } });
 
-           if (!isFinished && (car.isLocal || car.isBot)) {
+           if (!isFinished && (car.isLocal || (car.isBot && isHost))) {
               updateCarPhysics(car, dt, surface);
               if (car.isLocal && socket.connected && now - lastEmitRef.current > 50) {
                   socket.emit('player_tick', { id: String(car.id), x: car.x, y: car.y, a: car.angle, vx: car.vx, vy: car.vy, s: car.steer, b: car.brake, t: car.throttle, laps: car.laps, ft: car.finishTime, cw: car.currentWaypoint, bl: car.bestLapTime });
@@ -386,7 +471,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           const speed_val_final = Math.sqrt(car.vx*car.vx + car.vy*car.vy);
           audio.updateEngine(car.id, speed_val_final/1200, car.throttle, car.isBot);
 
-          if (!isFinished) {
+          if (!isFinished && (car.isLocal || (car.isBot && isHost))) {
               if (speed_val_final > 100 && car.isSkidding) { skidMarksRef.current.push({ x: car.x, y: car.y, a: car.angle, w: 22 }); if (skidMarksRef.current.length > 3000) skidMarksRef.current.shift(); }
               if (closestIndex > car.currentWaypoint && closestIndex < car.currentWaypoint + 400) car.currentWaypoint = closestIndex;
               if ((closestIndex < spline.length * 0.1 || closestIndex < 30) && car.currentWaypoint > spline.length * 0.7) {
@@ -413,6 +498,27 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
          const activeMans = carsRef.current.filter(c => !c.isBot);
          const humansFinished = activeMans.length > 0 && activeMans.every(c => c.finishTime !== null || c.givenUp);
          
+          // HOST BOTS BROADCAST (Throttled 50ms)
+          if (isHost && socket.connected && now - lastBotsEmitRef.current > 50) {
+              lastBotsEmitRef.current = now;
+              const botsData = carsRef.current.filter(c => c.isBot).map(c => ({
+                  id: c.id,
+                  x: c.x,
+                  y: c.y,
+                  a: c.angle,
+                  vx: c.vx,
+                  vy: c.vy,
+                  laps: c.laps,
+                  ft: c.finishTime,
+                  cw: c.currentWaypoint,
+                  bl: c.bestLapTime,
+                  d: c.damage
+              }));
+              if (botsData.length > 0) {
+                  socket.emit('host_bots_tick', botsData);
+              }
+          }
+
          // HOST SAFETY TIMEOUT
                    // HOST STANDINGS BROADCAST (Throttled 500ms)
           const lastStandingsEmit = carsRef.current.lastStandingsEmit || 0;
@@ -443,7 +549,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           // LOCAL SAFETY TIMER: Starts for everyone when the race winner finishes
           if (!raceFinished) {
             // Trigger grace period as soon as ANY car (bot or human) completes the race
-            const anyoneFinished = carsRef.current.some(c => c.finishTime !== null || c.givenUp);
+            const anyoneFinished = carsRef.current.some(c => c.finishTime !== null);
             if (anyoneFinished && raceGraceEndTimeRef.current === null) {
                 raceGraceEndTimeRef.current = now + 25000; // 25s grace period
             }
@@ -464,7 +570,9 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       GAME_WIDTH = canvasRef.current.width; GAME_HEIGHT = canvasRef.current.height;
       const mainCar = carsRef.current.find(c => c.isLocal) || carsRef.current.find(c => !c.isBot) || carsRef.current[0] || { x:0,y:0,vx:0,vy:0,angle:0,currentWaypoint:0 };
       const spd = Math.sqrt(mainCar.vx**2 + mainCar.vy**2);
-      const targetScale = (startSequence < 2 || raceFinished) ? 0.08 : Math.max(0.35, 1.0 - (spd / 1000) * 0.6);
+      // Zoom da c�mara ajustado: o carro nunca parece uma formiga e tem excelente visibilidade
+      const baseScale = 1.35;
+      const targetScale = raceFinished ? 0.95 : Math.max(0.95, baseScale - (spd / 1200) * 0.35);
       
       let lookA = mainCar.angle;
       if (spline && spline.length > 0) { const fIdx = (mainCar.currentWaypoint + Math.min(25, Math.floor(spd / 40) + 5)) % spline.length; const fN = spline[fIdx]; if (fN) { lookA = Math.atan2(fN.y-mainCar.y, fN.x-mainCar.x); if (Math.cos(lookA)*Math.cos(mainCar.angle)+Math.sin(lookA)*Math.sin(mainCar.angle) < -0.5) lookA += Math.PI; } }
@@ -476,10 +584,10 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
         offY = -Math.sin(camAngleRef.current)*(Math.min(1, spd/1000)*GAME_HEIGHT*0.35);
       }
       
-      if (!cameraRef.current) cameraRef.current = { x: mainCar.x, y: mainCar.y, scale: 0.08 };
+      if (!cameraRef.current) cameraRef.current = { x: mainCar.x, y: mainCar.y, scale: 1.35 };
       cameraRef.current.x += (mainCar.x - cameraRef.current.x) * 0.3;
       cameraRef.current.y += (mainCar.y - cameraRef.current.y) * 0.3;
-      cameraRef.current.scale += (targetScale - cameraRef.current.scale) * 0.02;
+      cameraRef.current.scale += (targetScale - cameraRef.current.scale) * 0.06;
       quadOffsetRef.current.x += (offX - quadOffsetRef.current.x) * 0.05;
       quadOffsetRef.current.y += (offY - quadOffsetRef.current.y) * 0.05;
 
@@ -539,7 +647,10 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       animationFrameId = requestAnimationFrame(update);
     };
     animationFrameId = requestAnimationFrame(update);
-    return () => cancelAnimationFrame(animationFrameId);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationFrameId);
+    };
   }, [raceFinished, startSequence, spline]);
 
   return (
@@ -631,7 +742,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
        )}
 
        {!isSetupPhase && !finalClassification && startSequence >= 4 && (
-         <div className="absolute bottom-12 left-8 flex flex-col gap-2 z-10">
+         <div className="absolute top-24 sm:top-28 md:top-auto md:bottom-12 left-4 md:left-8 flex flex-col gap-2 z-10 pointer-events-none scale-90 sm:scale-100 origin-top-left">
             {players.filter(p => !p.isBot && p.isLocal).map(p => ( 
                <div key={p.id} className="bg-black/80 border-l-4 p-4 rounded-r-xl w-72 shadow-2xl flex flex-col border-white/20" style={{borderLeftColor: p.color}}>
                   <div className="flex items-center gap-2 mb-1">
@@ -656,7 +767,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       {!isSetupPhase && !finalClassification && startSequence >= 4 && (
          <div className="absolute top-16 right-4 bg-black/60 backdrop-blur-md p-3 rounded-xl border border-white/20 shadow-2xl z-10 pointer-events-none w-48 transition-all">
              {players.filter(p => !p.isBot && p.isLocal).slice(0, 1).map(p => {
-                const ctrls = p.controls || {};
+                const ctrls: any = p.controls || {};
                 const c = {
                     up: (ctrls.up || 'ArrowUp').replace('Key','').replace('Arrow','▲'),
                     down: (ctrls.down || 'ArrowDown').replace('Key','').replace('Arrow','▼'),
@@ -691,7 +802,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
          </div>
       )}
       {!isSetupPhase && !finalClassification && startSequence >= 4 && (
-         <div className="absolute bottom-28 right-4 flex flex-col gap-1 z-10 w-64">
+         <div className="absolute bottom-32 sm:bottom-28 right-4 flex flex-col gap-1 z-10 w-56 sm:w-64">
             {liveStandings.map((entry, idx) => {
                const p = players.find(x => String(x.id) === String(entry.id)); if (!p) return null;
                return (
@@ -724,6 +835,102 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
              <span>CÂMARA: {camToast}</span>
           </div>
        )}
+      
+      {/* CONTROLOS T�TEIS PARA TELEM�VEL */}
+      {!isSetupPhase && !raceFinished && (
+        <>
+          {/* ESQUERDA: Cima / Baixo (2 quadrados colados na vertical com as setas) */}
+          <div className="fixed bottom-6 left-6 z-40 select-none touch-none flex flex-col items-center">
+            <div className="flex flex-col bg-black/80 backdrop-blur-md rounded-2xl border-2 border-white/25 overflow-hidden shadow-[0_10px_35px_rgba(0,0,0,0.8)]">
+              {/* Bot�o Cima */}
+              <button
+                type="button"
+                onPointerDown={(e) => { e.preventDefault(); handleTouchControl('up', true); }}
+                onPointerUp={(e) => { e.preventDefault(); handleTouchControl('up', false); }}
+                onPointerLeave={(e) => { e.preventDefault(); handleTouchControl('up', false); }}
+                onPointerCancel={(e) => { e.preventDefault(); handleTouchControl('up', false); }}
+                className={`w-16 h-16 sm:w-20 sm:h-20 flex flex-col items-center justify-center border-b border-white/15 transition-all active:scale-95 ${
+                  touchActive.up 
+                    ? 'bg-[#E10600] text-white shadow-inner' 
+                    : 'bg-white/5 text-gray-200 active:bg-[#E10600] active:text-white'
+                }`}
+                aria-label="Acelerar"
+              >
+                <svg className="w-8 h-8 sm:w-9 sm:h-9 fill-current" viewBox="0 0 24 24">
+                  <path d="M12 4l-8 8h5v8h6v-8h5z" />
+                </svg>
+                <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5">ACELERAR</span>
+              </button>
+
+              {/* Bot�o Baixo */}
+              <button
+                type="button"
+                onPointerDown={(e) => { e.preventDefault(); handleTouchControl('down', true); }}
+                onPointerUp={(e) => { e.preventDefault(); handleTouchControl('down', false); }}
+                onPointerLeave={(e) => { e.preventDefault(); handleTouchControl('down', false); }}
+                onPointerCancel={(e) => { e.preventDefault(); handleTouchControl('down', false); }}
+                className={`w-16 h-16 sm:w-20 sm:h-20 flex flex-col items-center justify-center transition-all active:scale-95 ${
+                  touchActive.down 
+                    ? 'bg-[#E10600] text-white shadow-inner' 
+                    : 'bg-white/5 text-gray-200 active:bg-[#E10600] active:text-white'
+                }`}
+                aria-label="Travar"
+              >
+                <svg className="w-8 h-8 sm:w-9 sm:h-9 fill-current" viewBox="0 0 24 24">
+                  <path d="M12 20l8-8h-5V4h-6v8H4z" />
+                </svg>
+                <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5">TRAVAR</span>
+              </button>
+            </div>
+          </div>
+
+          {/* DIREITA: Esquerda / Direita (2 quadrados colados na horizontal com as setas) */}
+          <div className="fixed bottom-6 right-6 z-40 select-none touch-none flex items-center">
+            <div className="flex flex-row bg-black/80 backdrop-blur-md rounded-2xl border-2 border-white/25 overflow-hidden shadow-[0_10px_35px_rgba(0,0,0,0.8)]">
+              {/* Bot�o Esquerda */}
+              <button
+                type="button"
+                onPointerDown={(e) => { e.preventDefault(); handleTouchControl('left', true); }}
+                onPointerUp={(e) => { e.preventDefault(); handleTouchControl('left', false); }}
+                onPointerLeave={(e) => { e.preventDefault(); handleTouchControl('left', false); }}
+                onPointerCancel={(e) => { e.preventDefault(); handleTouchControl('left', false); }}
+                className={`w-16 h-16 sm:w-20 sm:h-20 flex flex-col items-center justify-center border-r border-white/15 transition-all active:scale-95 ${
+                  touchActive.left 
+                    ? 'bg-[#E10600] text-white shadow-inner' 
+                    : 'bg-white/5 text-gray-200 active:bg-[#E10600] active:text-white'
+                }`}
+                aria-label="Virar � Esquerda"
+              >
+                <svg className="w-8 h-8 sm:w-9 sm:h-9 fill-current" viewBox="0 0 24 24">
+                  <path d="M4 12l8-8v5h8v6h-8v5z" />
+                </svg>
+                <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5">ESQ</span>
+              </button>
+
+              {/* Bot�o Direita */}
+              <button
+                type="button"
+                onPointerDown={(e) => { e.preventDefault(); handleTouchControl('right', true); }}
+                onPointerUp={(e) => { e.preventDefault(); handleTouchControl('right', false); }}
+                onPointerLeave={(e) => { e.preventDefault(); handleTouchControl('right', false); }}
+                onPointerCancel={(e) => { e.preventDefault(); handleTouchControl('right', false); }}
+                className={`w-16 h-16 sm:w-20 sm:h-20 flex flex-col items-center justify-center transition-all active:scale-95 ${
+                  touchActive.right 
+                    ? 'bg-[#E10600] text-white shadow-inner' 
+                    : 'bg-white/5 text-gray-200 active:bg-[#E10600] active:text-white'
+                }`}
+                aria-label="Virar � Direita"
+              >
+                <svg className="w-8 h-8 sm:w-9 sm:h-9 fill-current" viewBox="0 0 24 24">
+                  <path d="M20 12l-8 8v-5H4v-6h8V4z" />
+                </svg>
+                <span className="text-[9px] font-black uppercase tracking-tighter mt-0.5">DIR</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {!raceFinished && ( <button onClick={() => onBackToMenu([], 'quit')} className="fixed top-4 right-4 bg-red-600 text-white font-bold px-4 py-2 hover:bg-red-700 z-50 rounded-lg">DESISTIR</button> )}
       {raceFinished && (() => {
         let currentRes: RaceResultEntry[] = [];

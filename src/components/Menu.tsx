@@ -255,17 +255,18 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
       <header className={`bg-[#15151e] text-white flex items-center justify-between px-0 sm:px-6 py-0 border-t-4 border-[#E10600] z-20 shadow-md h-16 w-full sticky top-0 opacity-100`}>
         <div className="flex items-center w-full h-full max-w-7xl mx-auto">
           {/* F1 Logo Box */}
-          <div className="flex items-center justify-center bg-[#E10600] text-white font-black text-3xl px-6 h-full mr-6 select-none relative z-30 transform -skew-x-12 -ml-4">
+          <div className="flex items-center justify-center bg-[#E10600] text-white font-black text-2xl sm:text-3xl px-3 sm:px-6 h-full mr-2 sm:mr-6 select-none relative z-30 transform -skew-x-12 -ml-2 sm:-ml-4">
             <span className="inline-block transform skew-x-12 mt-1 tracking-tighter">F1</span>
           </div>
           
           {/* Navigation Links (Tabs) */}
-          <nav className="hidden md:flex items-center gap-6 text-[13px] font-bold tracking-widest uppercase h-full pt-1">
+          <nav className="flex items-center gap-3 sm:gap-6 text-xs sm:text-[13px] font-bold tracking-widest uppercase h-full pt-1">
             <button onClick={() => setActiveTab('overview')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'overview' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>PADDOCK</button>
             <button onClick={() => setActiveTab('teams')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'teams' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>GARAGEM</button>
-            <button onClick={() => setActiveTab('tracks')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'tracks' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>TRACKS</button>
-            <button onClick={onOpenProfile} className={`flex items-center h-full hover:text-white transition-colors border-b-2 border-transparent text-[#E10600] ml-4 hover:border-[#E10600]`}>
-              <svg className="w-4 h-4 mr-1.5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+            {/* TRACKS / Cria��o de pistas s� aparece no PC */}
+            <button onClick={() => setActiveTab('tracks')} className={`hidden md:flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'tracks' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>TRACKS</button>
+            <button onClick={onOpenProfile} className={`flex items-center h-full hover:text-white transition-colors border-b-2 border-transparent text-[#E10600] ml-1 sm:ml-4 hover:border-[#E10600]`}>
+              <svg className="w-4 h-4 mr-1 sm:mr-1.5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
               PILOTO
             </button>
           </nav>
