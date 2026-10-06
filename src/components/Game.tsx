@@ -4,6 +4,7 @@ import { TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { audio } from '../audio';
 import { updateCarPhysics, CarPhysics } from '../physics';
 import { drawTrack, drawEnvironments, drawF1Car, drawBridges3D } from '../renderer';
+import { drawAllTrackProps } from '../trackProps';
 import { TrackPreview } from './TrackPreview';
 import { socket } from '../socket';
 import { RaceResults, RaceResultEntry } from './RaceResults';
@@ -616,7 +617,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       if (camRot !== 0) ctx.rotate(camRot);
       ctx.scale(cameraRef.current.scale, cameraRef.current.scale);
       ctx.translate(Math.round(-cameraRef.current.x), Math.round(-cameraRef.current.y));
-      drawTrack(ctx, spline, pitSpline, false); drawEnvironments(ctx, spline, pitSpline, false);
+      drawTrack(ctx, spline, pitSpline, false); drawEnvironments(ctx, spline, pitSpline, false); drawAllTrackProps(ctx, track.props, "ground");
       skidMarksRef.current.forEach(sm => { ctx.save(); ctx.translate(sm.x, sm.y); ctx.rotate(sm.a); ctx.fillStyle='rgba(10,10,10,0.5)'; ctx.fillRect(-sm.w/2, -5, sm.w, 10); ctx.restore(); });
       carsRef.current.forEach(c => { if (spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); ctx.restore(); });
       drawBridges3D(ctx, spline);

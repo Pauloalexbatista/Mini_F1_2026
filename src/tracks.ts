@@ -1,3 +1,5 @@
+import { TrackProp } from './trackProps';
+export type { TrackProp } from './trackProps';
 export interface SplineNode {
   x: number;
   y: number;
@@ -20,6 +22,7 @@ export interface TrackDef {
   drsZones?: { start: number; end: number }[];
   svg_data?: string;
   pit_svg_data?: string;
+  props?: TrackProp[];
 }
 
 // Catmull-Rom Spline Interpolation for smooth tracks

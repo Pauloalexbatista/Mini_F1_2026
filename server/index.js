@@ -154,7 +154,7 @@ app.get('/api/me/records', authenticateToken, async (req, res) => {
 app.get('/api/tracks', async (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    const tracks = await db.all('SELECT id, name, svg_data, pit_svg_data, created_at FROM tracks ORDER BY created_at DESC');
+    const tracks = await db.all('SELECT id, name, svg_data, pit_svg_data, props_json, created_at FROM tracks ORDER BY created_at DESC');
     res.json(tracks);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -163,10 +163,10 @@ app.get('/api/tracks', async (req, res) => {
 
 app.post('/api/tracks', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { id, name, svg_data, pit_svg_data } = req.body;
+    const { id, name, svg_data, pit_svg_data, props_json } = req.body;
     await db.run(
-      'INSERT OR REPLACE INTO tracks (id, name, svg_data, pit_svg_data, created_by) VALUES (?, ?, ?, ?, ?)',
-      [id, name, svg_data, pit_svg_data, req.user.id]
+      'INSERT OR REPLACE INTO tracks (id, name, svg_data, pit_svg_data, props_json, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, name, svg_data, pit_svg_data, props_json || '[]', req.user.id]
     );
     res.status(201).json({ message: 'Track created successfully' });
   } catch (error) {

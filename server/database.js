@@ -85,6 +85,13 @@ export async function initDB() {
   await addColumn("helmet_color TEXT DEFAULT '#FFDD00'");
   await addColumn("controls TEXT");
 
+  const addTrackColumn = async (colDef) => {
+    try {
+      await db.exec(`ALTER TABLE tracks ADD COLUMN ${colDef};`);
+    } catch (e) {}
+  };
+  await addTrackColumn("props_json TEXT DEFAULT '[]'");
+
   console.log("[DB] Migração e validação de colunas concluída.");
 
   return db;
