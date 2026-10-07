@@ -663,10 +663,8 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                       <div 
                         key={t.id}
                         onClick={() => {
-                           if (isSelected) {
-                              setSelectedTracks(prev => prev.filter(id => id !== t.id));
-                           } else {
-                              setSelectedTracks(prev => [...prev, t.id]);
+                           if (!isSelected) {
+                              setSelectedTracks([t.id]);
                            }
                         }}
                         className={`cursor-pointer w-full flex flex-col h-full bg-[#15151e] rounded-2xl overflow-hidden transition-all duration-300 border-4 ${isSelected ? 'border-[#E10600] shadow-[0_15px_40px_rgba(225,6,0,0.4)] transform md:-translate-y-2 z-10 relative' : 'border-gray-800 opacity-95 hover:opacity-100 hover:border-gray-600 hover:-translate-y-1'}`}
@@ -708,15 +706,37 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                          <TrackTelemetryDisplay track={t} />
                          <TrackLeaderboard trackId={t.id.toString()} />
 
-                         <div className="p-5 bg-gray-100 border-t border-gray-300 flex justify-center mt-auto">
-                            {isSelected ? (
-                               <span className="bg-[#E10600] text-white font-black px-8 py-3 uppercase tracking-widest rounded-lg flex items-center gap-2 shadow-[0_0_15px_rgba(225,6,0,0.5)] text-sm">
-                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                                 ATIVA
-                               </span>
-                            ) : (
-                               <span className="text-gray-700 border-2 border-gray-300 bg-white font-bold px-8 py-3 uppercase tracking-widest text-xs rounded-lg transition-colors hover:text-black hover:border-gray-400">SELECIONAR</span>
-                            )}
+                         <div className="p-3 sm:p-4 bg-gray-900 border-t border-gray-800 flex items-center justify-between gap-2 mt-auto">
+                            <button
+                               type="button"
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (isSelected && selectedTracks.length > 1) {
+                                    setSelectedTracks(prev => prev.filter(id => id !== t.id));
+                                 } else {
+                                    setSelectedTracks([t.id]);
+                                 }
+                               }}
+                               className={`flex-1 py-3 px-2 uppercase tracking-widest text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                                 isSelected 
+                                   ? 'bg-gray-800 text-green-400 border border-green-500/40' 
+                                   : 'bg-[#1e1e28] text-white border border-gray-700 hover:border-[#E10600]'
+                               }`}
+                            >
+                               {isSelected ? '✓ SELECIONADA' : '+ ESCOLHER'}
+                            </button>
+                            
+                            <button
+                               type="button"
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 setSelectedTracks([t.id]);
+                                 setTimeout(() => onStart(), 30);
+                               }}
+                               className="flex-1 bg-[#E10600] active:bg-red-700 hover:bg-white hover:text-[#E10600] text-white font-black py-3 px-2 uppercase tracking-widest text-[11px] rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(225,6,0,0.5)]"
+                            >
+                               🏎️ CORRER AGORA
+                            </button>
                          </div>
                       </div>
                     )

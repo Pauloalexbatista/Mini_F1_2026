@@ -32,6 +32,40 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   const [startSequence, setStartSequence] = useState(isSetupPhase ? 0 : 1); 
   const [, setForceRender] = useState(0);
   const [cameraModeUI, setCameraModeUI] = useState<'CHASE' | 'CENTRAL' | 'DYNAMIC'>('CHASE');
+  const [zoomHeightMode, setZoomHeightMode] = useState<'HIGH' | 'MAX' | 'STANDARD'>('HIGH');
+  const zoomHeightModeRef = useRef<'HIGH' | 'MAX' | 'STANDARD'>('HIGH');
+
+  const cycleCameraMode = () => {
+    const modes: ('CHASE' | 'CENTRAL' | 'DYNAMIC')[] = ['CHASE', 'CENTRAL', 'DYNAMIC'];
+    const curIdx = modes.indexOf(cameraModeRef.current);
+    const next = modes[(curIdx + 1) % modes.length];
+    cameraModeRef.current = next;
+    setCameraModeUI(next);
+    const labels: Record<string, string> = {
+      'CHASE': 'Atrás do Carro',
+      'CENTRAL': 'Vista de Topo',
+      'DYNAMIC': 'Dinâmica'
+    };
+    setCamToast(labels[next]);
+    if (camToastTimeoutRef.current) clearTimeout(camToastTimeoutRef.current);
+    camToastTimeoutRef.current = setTimeout(() => setCamToast(null), 2000);
+  };
+
+  const cycleZoomMode = () => {
+    const modes: ('HIGH' | 'MAX' | 'STANDARD')[] = ['HIGH', 'MAX', 'STANDARD'];
+    const curIdx = modes.indexOf(zoomHeightModeRef.current);
+    const next = modes[(curIdx + 1) % modes.length];
+    zoomHeightModeRef.current = next;
+    setZoomHeightMode(next);
+    const labels: Record<string, string> = {
+      'HIGH': 'Altitude Elevada (Curvas Visíveis)',
+      'MAX': 'Altitude Máxima (Vista Aérea)',
+      'STANDARD': 'Altitude Média'
+    };
+    setCamToast(labels[next]);
+    if (camToastTimeoutRef.current) clearTimeout(camToastTimeoutRef.current);
+    camToastTimeoutRef.current = setTimeout(() => setCamToast(null), 2000);
+  };
   const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   useEffect(() => {
@@ -317,19 +351,10 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
        keysRef.current[e.code] = true;
        const cameraKeys = players.filter(p => !p.isBot).map(p => p.controls?.camera || 'KeyC');
        if (cameraKeys.includes(e.code)) {
-          const modes: ('CHASE' | 'CENTRAL' | 'DYNAMIC')[] = ['CHASE', 'CENTRAL', 'DYNAMIC'];
-          const curIdx = modes.indexOf(cameraModeRef.current);
-          const next = modes[(curIdx + 1) % modes.length];
-          cameraModeRef.current = next;
-          setCameraModeUI(next);
-          const labels: Record<string, string> = {
-            'CHASE': 'Atrás do Carro',
-            'CENTRAL': 'Vista de Topo',
-            'DYNAMIC': 'Dinâmica'
-          };
-          setCamToast(labels[next]);
-          if (camToastTimeoutRef.current) clearTimeout(camToastTimeoutRef.current);
-          camToastTimeoutRef.current = setTimeout(() => setCamToast(null), 2000);
+          cycleCameraMode();
+       }
+       if (e.code === 'KeyZ' || e.code === 'KeyV') {
+          cycleZoomMode();
        }
     };
     const up = (e: KeyboardEvent) => { keysRef.current[e.code] = false; };
@@ -585,9 +610,22 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       GAME_WIDTH = canvasRef.current.width; GAME_HEIGHT = canvasRef.current.height;
       const mainCar = carsRef.current.find(c => c.isLocal) || carsRef.current.find(c => !c.isBot) || carsRef.current[0] || { x:0,y:0,vx:0,vy:0,angle:0,currentWaypoint:0 };
       const spd = Math.sqrt(mainCar.vx**2 + mainCar.vy**2);
-      // Zoom da c�mara ajustado: o carro nunca parece uma formiga e tem excelente visibilidade
-      const baseScale = 1.35;
-      const targetScale = raceFinished ? 0.95 : Math.max(0.95, baseScale - (spd / 1200) * 0.35);
+      // Altitude da câmara elevada para máxima visibilidade das curvas
+      const isMobile = typeof window !== 'undefined' && (window.innerWidth < 1024 || window.innerHeight < 600);
+      let baseScale = 0.72;
+      let minScale = 0.52;
+      if (zoomHeightModeRef.current === 'MAX') {
+        baseScale = isMobile ? 0.46 : 0.56;
+        minScale = isMobile ? 0.34 : 0.40;
+      } else if (zoomHeightModeRef.current === 'STANDARD') {
+        baseScale = isMobile ? 0.78 : 0.95;
+        minScale = isMobile ? 0.60 : 0.72;
+      } else {
+        // 'HIGH' (Default elevado - curvas e traçado bem visíveis à frente)
+        baseScale = isMobile ? 0.60 : 0.72;
+        minScale = isMobile ? 0.44 : 0.52;
+      }
+      const targetScale = raceFinished ? minScale : Math.max(minScale, baseScale - (spd / 1200) * 0.20);
       
       let lookA = mainCar.angle;
       if (spline && spline.length > 0) { const fIdx = (mainCar.currentWaypoint + Math.min(25, Math.floor(spd / 40) + 5)) % spline.length; const fN = spline[fIdx]; if (fN) { lookA = Math.atan2(fN.y-mainCar.y, fN.x-mainCar.x); if (Math.cos(lookA)*Math.cos(mainCar.angle)+Math.sin(lookA)*Math.sin(mainCar.angle) < -0.5) lookA += Math.PI; } }
@@ -599,7 +637,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
         offY = -Math.sin(camAngleRef.current)*(Math.min(1, spd/1000)*GAME_HEIGHT*0.35);
       }
       
-      if (!cameraRef.current) cameraRef.current = { x: mainCar.x, y: mainCar.y, scale: 1.35 };
+      if (!cameraRef.current) cameraRef.current = { x: mainCar.x, y: mainCar.y, scale: baseScale };
       cameraRef.current.x += (mainCar.x - cameraRef.current.x) * 0.3;
       cameraRef.current.y += (mainCar.y - cameraRef.current.y) * 0.3;
       cameraRef.current.scale += (targetScale - cameraRef.current.scale) * 0.06;
@@ -619,7 +657,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
         }
         camRot = -chaseAngleRef.current - Math.PI / 2;
         // Posicionar o carro a 80% da altura do ecrã: 80% de visão à frente da pista e 20% atrás
-        anchorY = Math.min(GAME_HEIGHT - 120, GAME_HEIGHT * 0.80);
+        anchorY = Math.min(GAME_HEIGHT - 70, GAME_HEIGHT * 0.82);
       } else if (cameraModeRef.current === 'DYNAMIC' && startSequence >= 4) {
         anchorX += quadOffsetRef.current.x;
         anchorY += quadOffsetRef.current.y;
@@ -947,7 +985,37 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
         </>
       )}
 
-      {!raceFinished && ( <button onClick={() => onBackToMenu([], 'quit')} className="fixed top-4 right-4 bg-red-600 text-white font-bold px-4 py-2 hover:bg-red-700 z-50 rounded-lg">DESISTIR</button> )}
+      {!raceFinished && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
+          {/* Botão de Modo de Câmara */}
+          <button
+            type="button"
+            onClick={cycleCameraMode}
+            className="bg-black/85 hover:bg-black text-yellow-400 font-black px-3 py-2 rounded-lg border border-yellow-500/50 shadow-lg text-xs flex items-center gap-1.5 transition-all active:scale-95"
+            title="Alternar Modo de Câmara (Tecla C)"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+            <span className="hidden sm:inline">CÂMARA:</span>
+            <span>{cameraModeUI === 'CHASE' ? 'ATRÁS' : cameraModeUI === 'CENTRAL' ? 'FIXO' : 'DINÂMICA'}</span>
+          </button>
+
+          {/* Botão de Altitude / Zoom da Câmara */}
+          <button
+            type="button"
+            onClick={cycleZoomMode}
+            className="bg-black/85 hover:bg-black text-white hover:text-green-400 font-black px-3 py-2 rounded-lg border border-white/25 shadow-lg text-xs flex items-center gap-1.5 transition-all active:scale-95"
+            title="Ajustar Altura da Câmara (Tecla Z)"
+          >
+            <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" /></svg>
+            <span className="hidden sm:inline">ALTURA:</span>
+            <span>{zoomHeightMode === 'HIGH' ? 'ALTA' : zoomHeightMode === 'MAX' ? 'MÁXIMA' : 'MÉDIA'}</span>
+          </button>
+
+          <button type="button" onClick={() => onBackToMenu([], 'quit')} className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg shadow-lg text-xs active:scale-95 transition-all">
+            DESISTIR
+          </button>
+        </div>
+      )}
       {raceFinished && (() => {
         let currentRes: RaceResultEntry[] = [];
         if (finalClassification) {
