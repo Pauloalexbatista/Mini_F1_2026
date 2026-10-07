@@ -31,7 +31,7 @@ export default function App() {
   // Mirror for computed activePlayers so socket handlers can read without stale closure
   const activePlayersRef = useRef<PlayerConfig[]>([]);
 
-  const fetchTracks = async (token: string, isAdmin: boolean) => {
+  const fetchTracks = async (token?: string, isAdmin?: boolean) => {
     try {
       const trackRes = await fetch('/api/tracks');
       let trackData = await trackRes.json();
@@ -68,6 +68,7 @@ export default function App() {
     const checkAuth = async () => {
       const token = localStorage.getItem('token');
       if (!token) {
+        await fetchTracks();
         setIsCheckingAuth(false);
         return;
       }

@@ -19,8 +19,8 @@ export function Auth({ onLogin }: AuthProps) {
 
     const endpoint = isLogin ? '/api/login' : '/api/register';
     const payload = isLogin 
-      ? { username, password } 
-      : { username, password, pilot_name: pilotName };
+      ? { username: username.trim(), password } 
+      : { username: username.trim(), password, pilot_name: pilotName.trim() };
 
     try {
       const res = await fetch(endpoint, {
@@ -52,7 +52,7 @@ export function Auth({ onLogin }: AuthProps) {
   };
 
   return (
-    <div className="w-full h-full absolute inset-0 bg-[#15151e] flex items-center justify-center overflow-hidden">
+    <div className="min-h-screen w-full bg-[#15151e] flex items-center justify-center p-4 py-8 overflow-y-auto">
       {/* Background Graphic Aesthetic */}
       <div className="absolute inset-0 z-0 pointer-events-none opacity-20"
         style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #E10600 0%, transparent 40%)'}}
@@ -81,7 +81,7 @@ export function Auth({ onLogin }: AuthProps) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               className="w-full bg-[#1e1e24] text-white p-3 border-b-2 border-transparent focus:border-[#E10600] outline-none font-mono transition-all"
-              placeholder="Ex: piloto2026"
+              placeholder="Ex: piloto2026" autoCapitalize="none" autoCorrect="off" spellCheck={false}
             />
           </div>
 
@@ -120,7 +120,29 @@ export function Auth({ onLogin }: AuthProps) {
           </button>
         </form>
 
-        <div className="mt-8 pt-6 border-t border-gray-800 text-center">
+        <div className="mt-4 text-center">
+            <button
+              type="button"
+              onClick={() => {
+                const guestUser = {
+                  id: 'guest_' + Math.floor(Math.random() * 10000),
+                  username: 'convidado',
+                  pilot_name: 'Piloto Mobile',
+                  role: 'guest',
+                  primary_color: '#E10600',
+                  secondary_color: '#000000',
+                  helmet_color: '#FFDD00'
+                };
+                onLogin('', guestUser);
+              }}
+              className="w-full bg-[#222] hover:bg-gray-800 text-yellow-400 font-black uppercase tracking-widest text-xs py-3 rounded-lg border border-yellow-500/30 transition-all flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+              JOGAR COMO CONVIDADO (PILOTO RÁPIDO)
+            </button>
+        </div>
+
+        <div className="mt-6 pt-6 border-t border-gray-800 text-center">
           <button 
             type="button"
             onClick={() => { setIsLogin(!isLogin); setError(''); }}

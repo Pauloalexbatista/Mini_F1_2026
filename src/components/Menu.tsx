@@ -264,7 +264,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
             <button onClick={() => setActiveTab('overview')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'overview' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>PADDOCK</button>
             <button onClick={() => setActiveTab('teams')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'teams' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>GARAGEM</button>
             {/* TRACKS / Cria��o de pistas s� aparece no PC */}
-            <button onClick={() => setActiveTab('tracks')} className={`hidden md:flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'tracks' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>TRACKS</button>
+            <button onClick={() => setActiveTab('tracks')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'tracks' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>PISTAS</button>
             <button onClick={onOpenProfile} className={`flex items-center h-full hover:text-white transition-colors border-b-2 border-transparent text-[#E10600] ml-1 sm:ml-4 hover:border-[#E10600]`}>
               <svg className="w-4 h-4 mr-1 sm:mr-1.5 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
               PILOTO
@@ -282,16 +282,12 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                  disabled={
                    ALL_TRACKS.length === 0 ||
                    selectedTracks.length === 0 ||
-                   // Online but no event = must create/join an event first
-                   (globalRoster.length > 0 && !activeEventId) ||
                    // In a multiplayer lobby: wait for all humans to be ready
                    (!!activeEventId && (!isHostPlayer || lobbyState.length < 1 || !lobbyState.every((p: any) => p.isReady)))
                  }
                  className="w-full sm:flex-1 bg-[#E10600] hover:bg-red-700 text-white disabled:bg-gray-800 disabled:text-gray-500 py-3 sm:py-5 px-6 rounded text-sm sm:text-base font-black italic tracking-widest uppercase transition-colors flex items-center justify-center gap-3 disabled:cursor-not-allowed group relative overflow-hidden"
               >
-                 {globalRoster.length > 0 && !activeEventId ? (
-                   'CRIAR OU JUNTAR EVENTO'
-                 ) : selectedTracks.length === 0 ? (
+                 {selectedTracks.length === 0 ? (
                    'SELECIONE UMA PISTA...'
                  ) : activeEventId ? (
                    !isHostPlayer ? (
@@ -302,7 +298,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                      'A AGUARDAR PILOTOS PRONTOS...'
                    )
                  ) : (
-                   <>IR PARA A <span className="hidden sm:inline ml-1">CORRIDA</span> <svg className="w-4 h-4 ml-2 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></>
+                   <>IR PARA A <span className="inline ml-1">CORRIDA</span> <svg className="w-4 h-4 ml-2 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></>
                  )}
              </button>
           </div>

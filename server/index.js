@@ -80,7 +80,8 @@ app.post('/api/register', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    const userRow = await db.get('SELECT * FROM users WHERE username = ?', [username]);
+    const cleanUsername = (username || '').trim();
+    const userRow = await db.get('SELECT * FROM users WHERE LOWER(username) = LOWER(?)', [cleanUsername]);
 
     if (!userRow) return res.status(400).json({ error: 'User not found' });
 
