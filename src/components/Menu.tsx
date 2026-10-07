@@ -5,7 +5,21 @@ import { drawTrack, drawF1Car, drawMoto, drawDriftCar, drawRallyCar } from '../r
 import { TrackPreview } from './TrackPreview';
 import { socket } from '../socket';
 
-function MenuCarPreview({ type, p, s, h }: { type: 'F1'|'MOTO'|'DRIFT'|'RALLY', p: string, s?: string, h?: string }) {
+function MenuCarPreview({ 
+  type, 
+  p, 
+  s, 
+  h, 
+  isSelected, 
+  onSelect 
+}: { 
+  type: 'F1'|'MOTO'|'DRIFT'|'RALLY', 
+  p: string, 
+  s?: string, 
+  h?: string, 
+  isSelected?: boolean, 
+  onSelect?: () => void 
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
      const canvas = canvasRef.current;
@@ -22,22 +36,39 @@ function MenuCarPreview({ type, p, s, h }: { type: 'F1'|'MOTO'|'DRIFT'|'RALLY', 
      else drawRallyCar(ctx, p, s || '#222');
      ctx.restore();
   }, [type, p, s, h]);
+
+  const isAvailable = type === 'F1' || type === 'DRIFT';
+
   return (
-    <div className="relative flex flex-col items-center">
-       <canvas ref={canvasRef} width={160} height={100} className="block" />
+    <div 
+       onClick={() => { if (isAvailable && onSelect) onSelect(); }}
+       className={"relative flex flex-col items-center p-2.5 rounded-xl border-2 transition-all select-none " + (
+         isSelected 
+           ? "border-yellow-400 bg-yellow-400/10 shadow-[0_0_20px_rgba(250,204,21,0.35)] scale-105 cursor-pointer ring-2 ring-yellow-400/40" 
+           : isAvailable 
+             ? "border-gray-700 bg-black/40 hover:border-gray-500 hover:bg-black/60 cursor-pointer" 
+             : "border-gray-800/40 bg-black/20 opacity-35 cursor-not-allowed"
+       )}
+    >
+       <canvas ref={canvasRef} width={160} height={100} className="block pointer-events-none" />
        
-       <div className="flex items-center gap-2 mt-2">
-           <span className={`text-[11px] font-black uppercase tracking-widest ${type === 'F1' ? 'text-[#E10600]' : 'text-gray-300'}`}>
-               {type === 'F1' ? 'F1 2026' : type}
+       <div className="flex items-center gap-1.5 mt-2">
+           <span className={"text-[11px] font-black uppercase tracking-widest " + (isSelected ? "text-yellow-400 font-black" : "text-gray-300")}>
+               {type === 'F1' ? 'F1 2026' : type === 'DRIFT' ? 'DRIFT SPEC' : type}
            </span>
-           {type !== 'F1' && (
-               <span className="text-[7px] font-black text-yellow-500 bg-black/95 px-1 py-0.5 border border-yellow-600 rounded tracking-widest uppercase">Brevemente</span>
+           {type === 'DRIFT' && !isSelected && (
+               <span className="text-[7px] font-black text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 border border-cyan-500/40 rounded tracking-widest uppercase">DISPONÍVEL</span>
+           )}
+           {isSelected && (
+               <span className="text-[7px] font-black text-black bg-yellow-400 px-1.5 py-0.5 rounded tracking-widest uppercase font-bold">EM USO</span>
+           )}
+           {type !== 'F1' && type !== 'DRIFT' && (
+               <span className="text-[7px] font-black text-gray-500 bg-black/95 px-1 py-0.5 border border-gray-700 rounded tracking-widest uppercase">Brevemente</span>
            )}
        </div>
     </div>
   );
 }
-
 
 function TrackTelemetryDisplay({ track }: { track: TrackDef }) {
   const telemetry = React.useMemo(() => getTrackTelemetry(track.nodes), [track]);
@@ -506,7 +537,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
              <div className="w-full max-w-4xl bg-[#1a1a24] border-2 border-gray-800 rounded-2xl p-6 flex flex-col md:flex-row gap-6 items-center justify-between shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
                 
                 <div className="w-full md:w-1/2 flex flex-col gap-6">
-                   <h3 className="text-white font-black text-2xl uppercase tracking-widest mb-2 border-b-2 border-[#E10600] pb-2 inline-block self-start">Classe: F1 2026</h3>
+                   <div className="flex items-center justify-between border-b-2 border-[#E10600] pb-2 mb-2"><h3 className="text-white font-black text-2xl uppercase tracking-widest">{players[0]?.vehicleType === 'DRIFT' ? 'Classe: Drift Spec (JDM)' : 'Classe: F1 2026'}</h3><span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-gray-300">{players[0]?.vehicleType === 'DRIFT' ? 'Power Slide RWD' : 'Downforce Máximo'}</span></div>
                    
                    <div>
                       <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-2 font-bold shadow-sm">Cor Primária (Carroçaria)</label>
@@ -532,13 +563,31 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
 
                 <div className="w-full md:w-1/2 flex justify-center mt-6 md:mt-0">
                    <div className="bg-black/80 rounded-2xl p-6 border border-gray-700 shadow-[inset_0_10px_30px_rgba(0,0,0,0.8)] w-full flex flex-col items-center">
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-4 w-full mb-6">
-                         <MenuCarPreview type="F1" p={players[0]?.color || '#E10600'} s={players[0]?.color2} h={players[0]?.helmetColor} />
-                         <MenuCarPreview type="MOTO" p={players[0]?.color || '#E10600'} s={players[0]?.color2} h={players[0]?.helmetColor} />
-                         <MenuCarPreview type="DRIFT" p={players[0]?.color || '#E10600'} s={players[0]?.color2} h={players[0]?.helmetColor} />
-                         <MenuCarPreview type="RALLY" p={players[0]?.color || '#E10600'} s={players[0]?.color2} h={players[0]?.helmetColor} />
+                      <div className="grid grid-cols-2 gap-3 w-full mb-4">
+                         <MenuCarPreview 
+                            type="F1" 
+                            p={players[0]?.color || "#E10600"} 
+                            s={players[0]?.color2} 
+                            h={players[0]?.helmetColor} 
+                            isSelected={players[0]?.vehicleType !== "DRIFT"} 
+                            onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: "F1" })} 
+                         />
+                         <MenuCarPreview 
+                            type="DRIFT" 
+                            p={players[0]?.color || "#E10600"} 
+                            s={players[0]?.color2} 
+                            h={players[0]?.helmetColor} 
+                            isSelected={players[0]?.vehicleType === "DRIFT"} 
+                            onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: "DRIFT" })} 
+                         />
+                         <MenuCarPreview type="MOTO" p={players[0]?.color || "#E10600"} s={players[0]?.color2} h={players[0]?.helmetColor} />
+                         <MenuCarPreview type="RALLY" p={players[0]?.color || "#E10600"} s={players[0]?.color2} h={players[0]?.helmetColor} />
                       </div>
-                      <div className="text-center text-gray-500 font-black italic tracking-widest uppercase text-[10px] mt-auto">MÁQUINAS EM DESENVOLVIMENTO: FÍSICAS EXCLUSIVAS</div>
+                      <div className="text-center text-gray-400 font-bold tracking-widest uppercase text-[10px] mt-auto">
+                         {players[0]?.vehicleType === "DRIFT" 
+                            ? "🔥 MODO DRIFT ATIVO: Tração traseira solta, derrapagens controladas e fumo contínuo!" 
+                            : "🏎️ MODO F1 ATIVO: Monolugar de alta aderência aerodinâmica com DRS e velocidade máxima."}
+                      </div>
                    </div>
                 </div>
 

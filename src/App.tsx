@@ -129,7 +129,8 @@ export default function App() {
       controls: DEFAULT_CONTROLS[0],
       isBot: false,
       isLocal: true,
-      difficulty: 1.0
+      difficulty: 1.0,
+      vehicleType: 'F1'
     }
   ]);
 
@@ -353,6 +354,7 @@ export default function App() {
                   color: isLocal ? (players[0]?.color || p.color) : p.color,
                   color2: isLocal ? (players[0]?.color2 || p.color2) : p.color2,
                   helmetColor: isLocal ? (players[0]?.helmetColor || p.helmetColor) : p.helmetColor,
+                  vehicleType: isLocal ? (players[0]?.vehicleType || p.vehicleType || 'F1') : (p.vehicleType || 'F1'),
                   difficulty: 1.0,
                   socketId: p.socketId,
                   isReady: p.isReady
@@ -369,6 +371,7 @@ export default function App() {
                color: players[0]?.color || user?.primary_color || '#E10600',
                color2: players[0]?.color2 || user?.secondary_color || '#000000',
                helmetColor: players[0]?.helmetColor || user?.helmet_color || '#FFDD00',
+               vehicleType: players[0]?.vehicleType || 'F1',
                difficulty: 1.0,
                socketId: undefined,
                isReady: true

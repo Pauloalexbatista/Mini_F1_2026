@@ -3,7 +3,7 @@ import { PlayerConfig, getSetupFromSpeed } from '../types';
 import { TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { audio } from '../audio';
 import { updateCarPhysics, CarPhysics } from '../physics';
-import { drawTrack, drawEnvironments, drawF1Car, drawBridges3D } from '../renderer';
+import { drawTrack, drawEnvironments, drawF1Car, drawDriftCar, drawBridges3D } from '../renderer';
 import { drawAllTrackProps } from '../trackProps';
 import { TrackPreview } from './TrackPreview';
 import { socket } from '../socket';
@@ -512,7 +512,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           audio.updateEngine(car.id, speed_val_final * 0.36, car.throttle, car.isBot);
 
           if (!isFinished && (car.isLocal || (car.isBot && isHost))) {
-              if (speed_val_final > 100 && car.isSkidding) { skidMarksRef.current.push({ x: car.x, y: car.y, a: car.angle, w: 22 }); if (skidMarksRef.current.length > 3000) skidMarksRef.current.shift(); }
+              const skidMinSpd = car.vehicleType === 'DRIFT' ? 35 : 100; const skidW = car.vehicleType === 'DRIFT' ? 25 : 22;
+              if (speed_val_final > skidMinSpd && car.isSkidding) { skidMarksRef.current.push({ x: car.x, y: car.y, a: car.angle, w: skidW }); if (skidMarksRef.current.length > 3000) skidMarksRef.current.shift(); }
               if (closestIndex > car.currentWaypoint && closestIndex < car.currentWaypoint + 400) car.currentWaypoint = closestIndex;
               if ((closestIndex < spline.length * 0.1 || closestIndex < 30) && car.currentWaypoint > spline.length * 0.7) {
                  car.laps++; car.currentWaypoint = 0;
@@ -672,9 +673,9 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       ctx.translate(Math.round(-cameraRef.current.x), Math.round(-cameraRef.current.y));
       drawTrack(ctx, spline, pitSpline, false); drawEnvironments(ctx, spline, pitSpline, false); drawAllTrackProps(ctx, track.props, "ground");
       skidMarksRef.current.forEach(sm => { ctx.save(); ctx.translate(sm.x, sm.y); ctx.rotate(sm.a); ctx.fillStyle='rgba(10,10,10,0.5)'; ctx.fillRect(-sm.w/2, -5, sm.w, 10); ctx.restore(); });
-      carsRef.current.forEach(c => { if (spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); ctx.restore(); });
+      carsRef.current.forEach(c => { if (spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); if (c.vehicleType === 'DRIFT') { drawDriftCar(ctx, c.color, c.color2 || '#222'); } else { drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); } ctx.restore(); });
       drawBridges3D(ctx, spline);
-      carsRef.current.forEach(c => { if (!spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); ctx.restore(); });
+      carsRef.current.forEach(c => { if (!spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); if (c.vehicleType === 'DRIFT') { drawDriftCar(ctx, c.color, c.color2 || '#222'); } else { drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); } ctx.restore(); });
       ctx.restore();
 
       const hX = GAME_WIDTH/2, hY = GAME_HEIGHT-80; ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(hX-290, hY, 580, 60); ctx.fillStyle = '#FFF'; ctx.fillRect(hX-270, hY+10, 85, 40);
@@ -803,63 +804,16 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
        )}
 
        {!isSetupPhase && !finalClassification && startSequence >= 4 && (
-         <div className="absolute top-24 sm:top-28 md:top-auto md:bottom-12 left-4 md:left-8 flex flex-col gap-2 z-10 pointer-events-none scale-90 sm:scale-100 origin-top-left">
+         <div className="absolute top-[96px] left-3 z-10 flex flex-col gap-1 pointer-events-none select-none">
             {players.filter(p => !p.isBot && p.isLocal).map(p => ( 
-               <div key={p.id} className="bg-black/80 border-l-4 p-4 rounded-r-xl w-72 shadow-2xl flex flex-col border-white/20" style={{borderLeftColor: p.color}}>
-                  <div className="flex items-center gap-2 mb-1">
-                     <span className="w-3 h-3 rounded-full animate-pulse" style={{backgroundColor: p.color}}></span>
-                     <span className="text-white font-black text-2xl italic uppercase tracking-tighter">{p.driverName || 'DRIVER'}</span>
+               <div key={p.id} className="bg-black/85 backdrop-blur-md px-2 py-1 rounded-lg border border-white/15 shadow flex items-center justify-between" style={{ width: 88 }}>
+                  <div className="flex items-center gap-1">
+                     <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{backgroundColor: p.color}}></span>
+                     <span id={`hud-lap-${p.id}`} className="text-white font-mono font-bold text-[10px] leading-none">1/{totalLaps}</span>
                   </div>
-                  <div className="flex justify-between items-end">
-                     <div className="flex flex-col">
-                        <span className="text-[10px] text-gray-400 font-bold uppercase mb-[-4px]">Live Time</span>
-                        <span id={`hud-time-${p.id}`} className="text-yellow-400 font-mono text-2xl tabular-nums">00:00.00</span>
-                     </div>
-                     <div className="flex flex-col items-end">
-                        <span className="text-[10px] text-gray-400 font-bold uppercase mb-[-4px]">Volta</span>
-                        <span id={`hud-lap-${p.id}`} className="text-white font-black text-2xl italic">1 <span className="text-gray-500 text-sm">/ {totalLaps}</span></span>
-                     </div>
-                  </div>
+                  <span id={`hud-time-${p.id}`} className="text-yellow-400 font-mono font-bold text-[10px] leading-none">00:00.0</span>
                </div> 
             ))}
-         </div>
-      )}
-
-      {!isSetupPhase && !finalClassification && startSequence >= 4 && (
-         <div className="absolute top-16 right-4 bg-black/60 backdrop-blur-md p-3 rounded-xl border border-white/20 shadow-2xl z-10 pointer-events-none w-48 transition-all">
-             {players.filter(p => !p.isBot && p.isLocal).slice(0, 1).map(p => {
-                const ctrls: any = p.controls || {};
-                const c = {
-                    up: (ctrls.up || 'ArrowUp').replace('Key','').replace('Arrow','▲'),
-                    down: (ctrls.down || 'ArrowDown').replace('Key','').replace('Arrow','▼'),
-                    left: (ctrls.left || 'ArrowLeft').replace('Key','').replace('Arrow','◀'),
-                    right: (ctrls.right || 'ArrowRight').replace('Key','').replace('Arrow','▶'),
-                    camera: (ctrls.camera || 'KeyC').replace('Key','').replace('Arrow','C')
-                };
-                return (
-                  <div key="controls-hint" className="grid grid-cols-2 gap-x-2 gap-y-3">
-                     <div className="flex items-center gap-2">
-                        <kbd className="w-8 h-8 rounded bg-white text-black font-black flex items-center justify-center text-sm shadow-[0_2px_0_#ccc] uppercase">{c.up}</kbd>
-                        <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">GAS</span>
-                     </div>
-                     <div className="flex items-center gap-2">
-                        <kbd className="w-8 h-8 rounded bg-[#E10600] text-white font-black flex items-center justify-center text-sm shadow-[0_2px_0_#900] uppercase">{c.down}</kbd>
-                        <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">STOP</span>
-                     </div>
-                     <div className="flex items-center gap-2">
-                        <div className="flex bg-white/10 rounded p-0.5 border border-white/10 gap-0.5">
-                           <kbd className="w-6 h-7 rounded bg-white text-black font-black flex items-center justify-center text-[10px] uppercase">{c.left}</kbd>
-                           <kbd className="w-6 h-7 rounded bg-white text-black font-black flex items-center justify-center text-[10px] uppercase">{c.right}</kbd>
-                        </div>
-                        <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">TURN</span>
-                     </div>
-                     <div className="flex items-center gap-2">
-                        <kbd className="w-8 h-8 rounded bg-yellow-400 text-black font-black flex items-center justify-center text-sm shadow-[0_2px_0_#b80] uppercase">{c.camera}</kbd>
-                        <span className="text-[8px] font-black text-white uppercase italic tracking-tighter">{`CAM (${cameraModeUI === 'CHASE' ? 'ATRÁS' : cameraModeUI === 'CENTRAL' ? 'FIXO' : 'DINÂMICO'})`}</span>
-                     </div>
-                  </div>
-                );
-             })}
          </div>
       )}
       {!isSetupPhase && !finalClassification && startSequence >= 4 && liveStandings.length > 0 && (() => {

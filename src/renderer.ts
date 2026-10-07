@@ -777,30 +777,97 @@ export function drawMoto(ctx: CanvasRenderingContext2D, pColor: string, sColor: 
 }
 
 export function drawDriftCar(ctx: CanvasRenderingContext2D, pColor: string, sColor: string) {
-  // Main Body (JDM Coupe)
-  ctx.fillStyle = pColor;
-  ctx.fillRect(-14, -8, 28, 16);
-  
-  // Roof
-  ctx.fillStyle = sColor;
-  ctx.fillRect(-5, -7, 12, 14); 
-  
-  // Windows
+  // 1. Soft Asphalt Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(-16, -11, 32, 22);
+
+  // 2. Widebody Stanced Wheels & Camber
   ctx.fillStyle = '#111';
-  ctx.fillRect(5, -6, 4, 12); // windshield
-  ctx.fillRect(-8, -6, 2, 12); // rear window
-  
-  // Spoiler
-  ctx.fillStyle = sColor;
-  ctx.fillRect(-16, -9, 3, 18);
-  
-  // Wheels (Stanced)
-  const wheelColor = '#222';
-  ctx.fillStyle = wheelColor;
-  ctx.fillRect(8, -10, 6, 3);
-  ctx.fillRect(8, 7, 6, 3);
-  ctx.fillRect(-12, -11, 7, 4);
-  ctx.fillRect(-12, 7, 7, 4);
+  ctx.fillRect(-13, -12, 7.5, 3.5); // Rear Left (wide offset)
+  ctx.fillRect(-13, 8.5, 7.5, 3.5);  // Rear Right
+  ctx.fillRect(8, -11.5, 6.5, 3);    // Front Left
+  ctx.fillRect(8, 8.5, 6.5, 3);      // Front Right
+
+  // Bronze / Gold Drift Alloy Rims
+  ctx.fillStyle = '#E5A93C';
+  ctx.fillRect(-11, -11, 3.5, 1.5);
+  ctx.fillRect(-11, 9.5, 3.5, 1.5);
+  ctx.fillRect(9.5, -10.5, 3, 1.2);
+  ctx.fillRect(9.5, 9.3, 3, 1.2);
+
+  // 3. Flared Widebody Fenders
+  ctx.fillStyle = sColor || '#222';
+  ctx.fillRect(-14, -10.5, 9, 21); // Rear overfenders
+  ctx.fillRect(7, -10, 7, 20);     // Front overfenders
+
+  // 4. Main Sculpted Body (JDM Tuner Silhouette)
+  ctx.fillStyle = pColor;
+  ctx.beginPath();
+  ctx.moveTo(15, -6);
+  ctx.lineTo(16, -4);
+  ctx.lineTo(16, 4);
+  ctx.lineTo(15, 6);
+  ctx.lineTo(7, 9);
+  ctx.lineTo(-13, 9.5);
+  ctx.lineTo(-15, 7.5);
+  ctx.lineTo(-15, -7.5);
+  ctx.lineTo(-13, -9.5);
+  ctx.lineTo(7, -9);
+  ctx.closePath();
+  ctx.fill();
+
+  // 5. Front Carbon Splitter Lip
+  ctx.fillStyle = '#151515';
+  ctx.fillRect(15, -7.5, 2.5, 15);
+
+  // Dual Hood Cooling Vents
+  ctx.fillStyle = sColor || '#222';
+  ctx.fillRect(4, -4.5, 4, 2);
+  ctx.fillRect(4, 2.5, 4, 2);
+
+  // 6. Cockpit & Dark Tint Glass
+  ctx.fillStyle = '#0f1015';
+  ctx.beginPath();
+  ctx.moveTo(5, -6);
+  ctx.lineTo(5, 6);
+  ctx.lineTo(-8, 6.5);
+  ctx.lineTo(-8, -6.5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Windshield Gloss Gradient Reflection
+  ctx.fillStyle = 'rgba(120, 215, 255, 0.45)';
+  ctx.beginPath();
+  ctx.moveTo(4.5, -5.5);
+  ctx.lineTo(4.5, 5.5);
+  ctx.lineTo(1.5, 4.5);
+  ctx.lineTo(1.5, -4.5);
+  ctx.closePath();
+  ctx.fill();
+
+  // Roof Top
+  ctx.fillStyle = sColor || '#222';
+  ctx.fillRect(-6.5, -5.5, 10, 11);
+
+  // 7. Xenon Headlights (Crisp Ice Blue/White)
+  ctx.fillStyle = '#E0F7FA';
+  ctx.fillRect(14, -7, 2, 3);
+  ctx.fillRect(14, 4, 2, 3);
+
+  // 8. Carbon GT Wing (High-Downforce Drift Spoiler)
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(-17, -10.5, 3.2, 21); // GT carbon blade
+  ctx.fillStyle = pColor; // Endplates matching primary paint
+  ctx.fillRect(-18, -11, 4.2, 2);
+  ctx.fillRect(-18, 9, 4.2, 2);
+
+  // 9. Japanese Blast Pipes (Titanium Exhausts with Blue Burnt Tip)
+  ctx.fillStyle = '#777';
+  ctx.fillRect(-17.5, 4.5, 3, 1.5);
+  ctx.fillRect(-17.5, 6.5, 3, 1.5);
+  ctx.fillStyle = '#00E5FF';
+  ctx.fillRect(-18.5, 4.5, 1, 1.5);
+  ctx.fillRect(-18.5, 6.5, 1, 1.5);
 }
 
 export function drawRallyCar(ctx: CanvasRenderingContext2D, pColor: string, sColor: string) {

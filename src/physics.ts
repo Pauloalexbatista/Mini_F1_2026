@@ -2,6 +2,7 @@ import { CarSetupStats } from './types';
 
 export interface CarPhysics {
   id: number;
+  vehicleType?: 'F1' | 'DRIFT';
   x: number;
   y: number;
   vx: number; // velocity vector X
@@ -111,21 +112,31 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
   let longAccel = tractionAccel + resistanceAccel;
 
   // 3. Apply Steering and Lateral Grip
+  const isDriftCar = car.vehicleType === 'DRIFT';
+
   if (Math.abs(forwardVel) > 10) {
-    // Menos grip (Extrema Velocidade) = O raio de viragem explode com a velocidade.
-    // Mais grip (Mónaco) = O raio de viragem mantém-se apertado mesmo a alta velocidade.
-    const speedFactor = 1.8 / gripPenalty; // Monza -> 1.8, Monaco -> ~1.12
-    const turnRadius = 40 + (Math.abs(forwardVel) * speedFactor); 
-    car.angularVelocity = (forwardVel / turnRadius) * car.steer * gripPenalty;
+    if (isDriftCar) {
+      // Drift steering: snappy, high-angle turn with power oversteer
+      const turnRadius = 28 + (Math.abs(forwardVel) * 0.95);
+      let steerTurn = (forwardVel / turnRadius) * car.steer;
+      // Oversteer kick when throttling into a turn
+      if (car.throttle > 0.1 && Math.abs(car.steer) > 0.05) {
+        steerTurn += car.steer * 2.2 * car.throttle;
+      }
+      car.angularVelocity = steerTurn;
+    } else {
+      const speedFactor = 1.8 / gripPenalty;
+      const turnRadius = 40 + (Math.abs(forwardVel) * speedFactor); 
+      car.angularVelocity = (forwardVel / turnRadius) * car.steer * gripPenalty;
+    }
   } else {
-    // Se estivermos quase parados, rodamos fisicamente o carro quase no mesmo sítio
-    car.angularVelocity = car.steer * 2.0 * gripPenalty;
+    car.angularVelocity = car.steer * (isDriftCar ? 2.8 : 2.0) * gripPenalty;
   }
   car.angle += car.angularVelocity * dt;
 
   // Lateral acceleration (Tire Grip)
-  const corneringStiffnessAccel = 5000.0 * car.grip * gripPenalty;
-  const maxLateralAccel = 1500.0 * car.grip * gripPenalty; 
+  const corneringStiffnessAccel = (isDriftCar ? 2200.0 : 5000.0) * car.grip * gripPenalty;
+  const maxLateralAccel = (isDriftCar ? 900.0 : 1500.0) * car.grip * gripPenalty; 
   
   let slipAngle = Math.atan2(lateralVel, Math.abs(forwardVel) + 1);
   let latAccel = -corneringStiffnessAccel * slipAngle;
@@ -134,7 +145,7 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
   if (latAccel < -maxLateralAccel) latAccel = -maxLateralAccel;
 
   if (Math.abs(latAccel) >= maxLateralAccel) {
-    longAccel -= Math.abs(forwardVel) * 1.5; // braking when drifting
+    longAccel -= Math.abs(forwardVel) * (isDriftCar ? 0.35 : 1.5);
   }
 
   const globalAccelX = longAccel * cosA - latAccel * sinA;
@@ -178,6 +189,7 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
       wearRate += 0.1; // NÍVEL II: Relva
   }
   
+  if (car.vehicleType === 'DRIFT' && (Math.abs(lateralVel) > 24 || (car.throttle > 0.5 && Math.abs(car.steer) > 0.2))) { car.isSkidding = true; }
   if (car.brake > 0.6) {
       wearRate += 0.15; // NÍVEL IV: Travagem a fundo
       car.isSkidding = true; 
