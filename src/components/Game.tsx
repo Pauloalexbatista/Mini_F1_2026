@@ -32,6 +32,20 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
   const [startSequence, setStartSequence] = useState(isSetupPhase ? 0 : 1); 
   const [, setForceRender] = useState(0);
   const [cameraModeUI, setCameraModeUI] = useState<'CHASE' | 'CENTRAL' | 'DYNAMIC'>('CHASE');
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const hasTouch = typeof window !== 'undefined' && ('ontouchstart' in window || (navigator && navigator.maxTouchPoints > 0));
+      const isMobileUA = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isNarrow = typeof window !== 'undefined' && window.innerWidth < 1024;
+      setIsMobileDevice(Boolean(isMobileUA || (hasTouch && isNarrow)));
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
   const [touchActive, setTouchActive] = useState<{ up: boolean; down: boolean; left: boolean; right: boolean }>({
     up: false,
     down: false,
@@ -597,14 +611,15 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       let anchorY = GAME_HEIGHT / 2;
 
       if (cameraModeRef.current === 'CHASE') {
-        if (startSequence >= 2 && !raceFinished) {
+        if (startSequence < 2) {
+          chaseAngleRef.current = mainCar.angle;
+        } else {
           const aDiffChase = Math.atan2(Math.sin(mainCar.angle - chaseAngleRef.current), Math.cos(mainCar.angle - chaseAngleRef.current));
           chaseAngleRef.current += aDiffChase * 0.12;
-          camRot = -chaseAngleRef.current - Math.PI / 2;
-          anchorY = GAME_HEIGHT * 0.68;
-        } else {
-          chaseAngleRef.current = mainCar.angle;
         }
+        camRot = -chaseAngleRef.current - Math.PI / 2;
+        // Posicionar o carro a 80% da altura do ecrã: 80% de visão à frente da pista e 20% atrás
+        anchorY = Math.min(GAME_HEIGHT - 120, GAME_HEIGHT * 0.80);
       } else if (cameraModeRef.current === 'DYNAMIC' && startSequence >= 4) {
         anchorX += quadOffsetRef.current.x;
         anchorY += quadOffsetRef.current.y;
@@ -838,10 +853,10 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
        )}
       
       {/* CONTROLOS T�TEIS PARA TELEM�VEL */}
-      {!isSetupPhase && !raceFinished && (
+      {!isSetupPhase && !raceFinished && isMobileDevice && (
         <>
-          {/* ESQUERDA: Cima / Baixo (2 quadrados colados na vertical com as setas) */}
-          <div className="fixed bottom-6 left-6 z-40 select-none touch-none flex flex-col items-center">
+          {/* ESQUERDA: Cima / Baixo (2 quadrados colados na vertical com as setas) - Só em Mobile */}
+          <div className="fixed bottom-6 left-6 z-40 select-none touch-none flex flex-col items-center md:hidden">
             <div className="flex flex-col bg-black/80 backdrop-blur-md rounded-2xl border-2 border-white/25 overflow-hidden shadow-[0_10px_35px_rgba(0,0,0,0.8)]">
               {/* Bot�o Cima */}
               <button
@@ -885,8 +900,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
             </div>
           </div>
 
-          {/* DIREITA: Esquerda / Direita (2 quadrados colados na horizontal com as setas) */}
-          <div className="fixed bottom-6 right-6 z-40 select-none touch-none flex items-center">
+          {/* DIREITA: Esquerda / Direita (2 quadrados colados na horizontal com as setas) - Só em Mobile */}
+          <div className="fixed bottom-6 right-6 z-40 select-none touch-none flex items-center md:hidden">
             <div className="flex flex-row bg-black/80 backdrop-blur-md rounded-2xl border-2 border-white/25 overflow-hidden shadow-[0_10px_35px_rgba(0,0,0,0.8)]">
               {/* Bot�o Esquerda */}
               <button

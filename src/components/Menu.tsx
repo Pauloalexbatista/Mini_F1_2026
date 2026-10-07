@@ -594,17 +594,33 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
         {/* TRACKS CAROUSEL UI */}
         {activeTab === 'tracks' && (
            <div className="animate-in fade-in duration-500">
-             <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end border-b border-gray-800 pb-4 gap-4">
-                <h2 className="text-3xl font-black text-white uppercase tracking-tighter">SELECT YOUR TRACK</h2>
-                {user?.role === 'admin' && (
-                    <button 
-                      onClick={onOpenBuilder}
-                      className="bg-[#E10600] text-white font-black uppercase tracking-widest text-[11px] px-6 py-3 rounded hover:bg-white hover:text-[#E10600] transition-colors flex items-center gap-2 shadow-[0_0_15px_rgba(225,6,0,0.5)]"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                      NOVO CIRCUITO - TRACK BUILDER
-                    </button>
-                )}
+             <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 gap-4">
+                <div>
+                  <h2 className="text-3xl font-black text-white uppercase tracking-tighter">SELECT YOUR TRACK</h2>
+                  <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-1">
+                    {selectedTracks.length} pista{selectedTracks.length !== 1 ? 's' : ''} selecionada{selectedTracks.length !== 1 ? 's' : ''} para a corrida
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 w-full sm:w-auto justify-end flex-wrap">
+                  {user?.role === 'admin' && (
+                      <button 
+                        onClick={onOpenBuilder}
+                        className="bg-[#E10600] text-white font-black uppercase tracking-widest text-[11px] px-5 py-3 rounded hover:bg-white hover:text-[#E10600] transition-colors flex items-center gap-2 shadow-[0_0_15px_rgba(225,6,0,0.5)]"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                        NOVO CIRCUITO - TRACK BUILDER
+                      </button>
+                  )}
+                  <button 
+                    onClick={() => setActiveTab('overview')}
+                    className="bg-white text-black font-black uppercase tracking-widest px-6 py-3 rounded-xl hover:bg-gray-300 transition-colors flex items-center gap-2 shadow-lg text-xs"
+                  >
+                    <span>CONFIRMAR PISTA</span>
+                    <svg className="w-4 h-4 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </button>
+                </div>
              </div>
              
              {/* TRACKS FILTER BAR (Fallbacks if missing)*/}
