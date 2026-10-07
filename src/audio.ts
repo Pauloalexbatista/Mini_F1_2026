@@ -1,6 +1,13 @@
 export class AudioEngine {
   private ctx: AudioContext | null = null;
-  private f1Engines: Map<number, { osc1: OscillatorNode, osc2: OscillatorNode, gain1: GainNode, gain2: GainNode, masterGain: GainNode }> = new Map();
+  private f1Engines: Map<number, { 
+    osc1: OscillatorNode, 
+    osc2: OscillatorNode, 
+    filter: BiquadFilterNode,
+    gain1: GainNode, 
+    gain2: GainNode, 
+    masterGain: GainNode 
+  }> = new Map();
 
   init() {
     if (!this.ctx) {
@@ -31,8 +38,8 @@ export class AudioEngine {
     osc.frequency.setValueAtTime(freq, time);
     
     gain.gain.setValueAtTime(0, time);
-    gain.gain.linearRampToValueAtTime(0.1, time + 0.05);
-    gain.gain.setValueAtTime(0.1, time + duration - 0.05);
+    gain.gain.linearRampToValueAtTime(0.08, time + 0.05);
+    gain.gain.setValueAtTime(0.08, time + duration - 0.05);
     gain.gain.linearRampToValueAtTime(0, time + duration);
 
     osc.connect(gain);
@@ -51,7 +58,7 @@ export class AudioEngine {
     osc.frequency.setValueAtTime(100, t);
     osc.frequency.exponentialRampToValueAtTime(10, t + 0.2);
     
-    gain.gain.setValueAtTime(0.2, t);
+    gain.gain.setValueAtTime(0.15, t);
     gain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
 
     osc.connect(gain);
@@ -63,7 +70,7 @@ export class AudioEngine {
   playDrift() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    const bufferSize = this.ctx.sampleRate * 0.2; // 0.2 seconds of noise
+    const bufferSize = this.ctx.sampleRate * 0.2;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
@@ -78,7 +85,7 @@ export class AudioEngine {
     filter.frequency.value = 1000;
 
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.05, t);
+    gain.gain.setValueAtTime(0.04, t);
     gain.gain.linearRampToValueAtTime(0, t + 0.2);
 
     noise.connect(filter);
@@ -90,24 +97,22 @@ export class AudioEngine {
   playVictory() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    // Ayrton Senna Theme approximation (Tema da Vitória)
+    // Tema da Vitória
     const notes = [
-      { f: 392.00, d: 0.15 }, // G4
-      { f: 523.25, d: 0.15 }, // C5
-      { f: 659.25, d: 0.3 },  // E5
-      { f: 587.33, d: 0.6 },  // D5
-      
-      { f: 392.00, d: 0.15 }, // G4
-      { f: 523.25, d: 0.15 }, // C5
-      { f: 659.25, d: 0.3 },  // E5
-      { f: 587.33, d: 0.6 },  // D5
-      
-      { f: 392.00, d: 0.15 }, // G4
-      { f: 523.25, d: 0.15 }, // C5
-      { f: 698.46, d: 0.3 },  // F5
-      { f: 659.25, d: 0.3 },  // E5
-      { f: 587.33, d: 0.15 }, // D5
-      { f: 523.25, d: 0.8 },  // C5
+      { f: 392.00, d: 0.15 },
+      { f: 523.25, d: 0.15 },
+      { f: 659.25, d: 0.3 },
+      { f: 587.33, d: 0.6 },
+      { f: 392.00, d: 0.15 },
+      { f: 523.25, d: 0.15 },
+      { f: 659.25, d: 0.3 },
+      { f: 587.33, d: 0.6 },
+      { f: 392.00, d: 0.15 },
+      { f: 523.25, d: 0.15 },
+      { f: 698.46, d: 0.3 },
+      { f: 659.25, d: 0.3 },
+      { f: 587.33, d: 0.15 },
+      { f: 523.25, d: 0.8 },
     ];
 
     let currentTime = t;
@@ -117,61 +122,66 @@ export class AudioEngine {
     });
   }
 
-  updateEngine(carId: number, speed: number, throttle: number, isBot: boolean) {
+  updateEngine(carId: number, speedKmh: number, throttle: number, isBot: boolean) {
     if (!this.ctx) return;
-    if (isBot) return; // Only play human sound to avoid clutter
+    if (isBot) return; // Apenas o carro do jogador
 
     if (!this.f1Engines.has(carId)) {
-      const osc1 = this.ctx.createOscillator(); // V6 Exhaust
-      const osc2 = this.ctx.createOscillator(); // MGU-K Turbo Whine
+      const osc1 = this.ctx.createOscillator(); // Corpo V6
+      const osc2 = this.ctx.createOscillator(); // Sub-harmónica suave
+      const filter = this.ctx.createBiquadFilter(); // Filtro passa-baixo para cortar sons agudos estridentes
       const gain1 = this.ctx.createGain();
       const gain2 = this.ctx.createGain();
       const masterGain = this.ctx.createGain();
 
       osc1.type = 'sawtooth';
-      osc2.type = 'square'; 
+      osc2.type = 'triangle';
+
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(320, this.ctx.currentTime);
+      filter.Q.setValueAtTime(2.0, this.ctx.currentTime);
 
       osc1.connect(gain1);
       osc2.connect(gain2);
-      
-      gain1.connect(masterGain);
-      gain2.connect(masterGain);
+
+      gain1.connect(filter);
+      gain2.connect(filter);
+      filter.connect(masterGain);
       masterGain.connect(this.ctx.destination);
 
       osc1.start();
       osc2.start();
 
-      this.f1Engines.set(carId, { osc1, osc2, gain1, gain2, masterGain });
+      this.f1Engines.set(carId, { osc1, osc2, filter, gain1, gain2, masterGain });
     }
 
     const engine = this.f1Engines.get(carId)!;
-    const absSpeed = Math.min(1.0, Math.abs(speed));
     
-    // Throttle injects instant RPM response before speed catches up!
-    const simulatedRPM = (absSpeed * 0.70) + (throttle * 0.30);
-    
-    // F1 V6 Hybrid Simulator: Deep, throaty mechanic roar (Lowered base freq and max freq for darker/hoarser sound)
-    const baseFreq = 50 + (simulatedRPM * 150);
-    
-    // Osc 1: The Main Exhaust (Thick and aggressive)
-    engine.osc1.type = 'sawtooth';
-    engine.osc1.frequency.setTargetAtTime(baseFreq, this.ctx.currentTime, 0.03);
-    
-    // Osc 2: The Dissonant Engine Block (Square wave creates a hoarse, grittier rasp at low registers)
-    engine.osc2.type = 'square';
-    // Detuned tightly to create thick acoustic beating (trembling engine sound), octave up
-    engine.osc2.frequency.setTargetAtTime(baseFreq * 2.015, this.ctx.currentTime, 0.05);
+    // Escala linear proporcional de 0 a 350 km/h:
+    const safeKmh = Math.max(0, speedKmh);
+    const speedRatio = Math.min(1.0, safeKmh / 350);
 
-    // Throttle pop & crackle (Volume spikes instantly on throttle application)
-    const targetVol1 = throttle > 0 ? 0.3 : (speed > 50 ? 0.15 : 0.05); 
-    const targetVol2 = throttle > 0 ? 0.2 : (speed > 50 ? 0.1 : 0.05);
+    // Se estiver praticamente parado e sem acelerar, som quase mudo
+    if (safeKmh < 3 && throttle <= 0.05) {
+      engine.masterGain.gain.setTargetAtTime(0.001, this.ctx.currentTime, 0.1);
+      return;
+    }
 
-    engine.gain1.gain.setTargetAtTime(targetVol1, this.ctx.currentTime, 0.08);
-    engine.gain2.gain.setTargetAtTime(targetVol2, this.ctx.currentTime, 0.05);
+    // Frequência base: vai dos 45 Hz (parado) até 165 Hz (350 km/h)
+    // O acelerador dá uma resposta imediata de 15% mas a velocidade real dita o tom principal
+    const effectiveRatio = Math.min(1.0, (speedRatio * 0.85) + (throttle * 0.15));
+    const baseFreq = 45 + (effectiveRatio * 120);
 
-    // Master volume (Drastically reduced to keep sound deep but not ear-piercing)
-    const masterVol = 0.005 + (throttle * 0.015) + (absSpeed * 0.02);
-    engine.masterGain.gain.setTargetAtTime(masterVol, this.ctx.currentTime, 0.05);
+    engine.osc1.frequency.setTargetAtTime(baseFreq, this.ctx.currentTime, 0.04);
+    engine.osc2.frequency.setTargetAtTime(baseFreq * 0.5, this.ctx.currentTime, 0.04);
+
+    // O filtro corta frequências agudas (máx ~650 Hz), mantendo um ronco grave e mecânico agradável
+    const filterCutoff = 260 + (effectiveRatio * 380);
+    engine.filter.frequency.setTargetAtTime(filterCutoff, this.ctx.currentTime, 0.05);
+
+    // Volume master suave e constante (não irrita nem satura)
+    const targetVol = 0.006 + (effectiveRatio * 0.016);
+    engine.masterGain.gain.setTargetAtTime(targetVol, this.ctx.currentTime, 0.06);
   }
 
   stopAllEngines() {

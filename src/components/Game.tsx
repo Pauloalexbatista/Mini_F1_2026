@@ -509,7 +509,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           } // CLOSE if (!isFinished) started at 298
 
           const speed_val_final = Math.sqrt(car.vx*car.vx + car.vy*car.vy);
-          audio.updateEngine(car.id, speed_val_final/1200, car.throttle, car.isBot);
+          audio.updateEngine(car.id, speed_val_final * 0.36, car.throttle, car.isBot);
 
           if (!isFinished && (car.isLocal || (car.isBot && isHost))) {
               if (speed_val_final > 100 && car.isSkidding) { skidMarksRef.current.push({ x: car.x, y: car.y, a: car.angle, w: 22 }); if (skidMarksRef.current.length > 3000) skidMarksRef.current.shift(); }
@@ -784,7 +784,14 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
             )}
           </div>
        )}
-       {fastLapPopup && !raceFinished && startSequence >= 4 && ( <div className="absolute bottom-8 left-8 z-50 flex flex-col items-start animate-pulse"><div className="bg-black/90 px-8 py-3 border-t-4" style={{borderColor: fastLapPopup.color}}><span className="text-xl font-bold uppercase text-white">NOVA VOLTA RÁPIDA!</span><div className="text-5xl font-black text-white">{fastLapPopup.time}</div></div><div className="px-12 py-2 text-black font-black uppercase text-2xl" style={{backgroundColor: fastLapPopup.color}}>{fastLapPopup.name}</div></div> )}
+       {fastLapPopup && !raceFinished && startSequence >= 4 && (
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1.5 bg-black/90 backdrop-blur-md px-3 py-1 rounded-full border border-purple-500/60 shadow-[0_0_15px_rgba(168,85,247,0.4)] animate-in fade-in duration-200 pointer-events-none">
+          <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping"></span>
+          <span className="text-[9px] font-black uppercase text-purple-400 tracking-wider">VOLTA RÁPIDA</span>
+          <span className="text-[10px] font-bold text-white uppercase truncate max-w-[80px]">{fastLapPopup.name}</span>
+          <span className="text-[10px] font-mono font-black text-yellow-300 bg-purple-950/80 px-1.5 py-0.5 rounded border border-purple-500/30">{fastLapPopup.time}</span>
+        </div>
+      )}
        
        {raceEndCountdown !== null && !raceFinished && (
           <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center">
@@ -855,27 +862,55 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
              })}
          </div>
       )}
-      {!isSetupPhase && !finalClassification && startSequence >= 4 && (
-         <div className="absolute bottom-32 sm:bottom-28 right-4 flex flex-col gap-1 z-10 w-56 sm:w-64">
-            {liveStandings.map((entry, idx) => {
-               const p = players.find(x => String(x.id) === String(entry.id)); if (!p) return null;
-               return (
-                 <div key={entry.id} className="flex items-center bg-black/80 rounded-l border-l-4 overflow-hidden shadow-lg h-8" style={{borderColor: p.color}}>
-                    <span className="w-6 text-center text-white font-black text-[10px] bg-gray-900 h-full flex items-center justify-center">{idx + 1}</span>
-                    <span className="flex-1 text-white font-bold text-[11px] pl-3 uppercase tracking-tighter truncate italic">{p.driverName}</span>
-                    <div className="flex items-center gap-2 pr-3 h-full">
-                       {entry.isFastestLap && <span className="text-purple-400 animate-pulse text-xs">⭐</span>}
-                       <span className={`font-mono text-[9px] ${entry.isFastestLap ? 'text-purple-400 font-bold' : 'text-gray-400'}`}>
-                          {entry.bestLapMs ? formatTime(entry.bestLapMs) : '--:--.--'}
-                       </span>
-                    </div>
-                 </div>
-               );
-            })}
-         </div>
-      )}
+      {!isSetupPhase && !finalClassification && startSequence >= 4 && liveStandings.length > 0 && (() => {
+         const mainCar = carsRef.current.find(c => c.isLocal) || carsRef.current.find(c => !c.isBot) || carsRef.current[0];
+         const mainCarId = mainCar?.id;
+         const myIdx = liveStandings.findIndex(entry => String(entry.id) === String(mainCarId));
+         const safeIdx = myIdx >= 0 ? myIdx : 0;
+         
+         let startIdx = safeIdx - 1;
+         if (safeIdx === 0) {
+            startIdx = 0;
+         } else if (safeIdx >= liveStandings.length - 1) {
+            startIdx = Math.max(0, liveStandings.length - 3);
+         }
+         const displayed = liveStandings.slice(startIdx, startIdx + 3);
+
+         return (
+            <div className="absolute top-14 right-3 z-20 flex flex-col gap-1 w-32 sm:w-40 select-none pointer-events-none">
+               {displayed.map((entry) => {
+                  const p = players.find(x => String(x.id) === String(entry.id));
+                  if (!p) return null;
+                  const posIndex = liveStandings.findIndex(e => String(e.id) === String(entry.id)) + 1;
+                  const isMe = String(entry.id) === String(mainCarId);
+                  
+                  return (
+                     <div 
+                        key={entry.id} 
+                        className={`flex items-center h-5 sm:h-6 rounded overflow-hidden shadow backdrop-blur-md border ${
+                           isMe ? 'bg-black/95 border-yellow-400 font-black' : 'bg-black/75 border-white/10'
+                        }`}
+                     >
+                        <span 
+                           className={`w-5 sm:w-6 h-full flex items-center justify-center text-[9px] sm:text-[10px] font-black ${
+                              isMe ? 'bg-yellow-400 text-black' : 'bg-gray-800 text-white'
+                           }`}
+                        >
+                           {posIndex}
+                        </span>
+                        <div className="w-1.5 h-full" style={{ backgroundColor: p.color }}></div>
+                        <span className={`flex-1 pl-1 text-[9px] sm:text-[10px] uppercase truncate ${isMe ? 'text-yellow-300 font-black' : 'text-white font-medium'}`}>
+                           {p.driverName} {isMe ? '★' : ''}
+                        </span>
+                        {entry.isFastestLap && <span className="text-purple-400 text-[9px] pr-1 animate-pulse">🟣</span>}
+                     </div>
+                  );
+               })}
+            </div>
+         );
+      })()}
       {!isSetupPhase && (
-         <div className="absolute top-4 left-4 z-10 p-2 bg-black/60 backdrop-blur-lg rounded-2xl border-2 border-white/20 shadow-[0_0_30px_rgba(0,0,0,0.5)] overflow-hidden" style={{ width: 220, height: 220 }}>
+         <div className="absolute top-3 left-3 z-10 p-1 bg-black/60 backdrop-blur-md rounded-xl border border-white/20 shadow-md overflow-hidden" style={{ width: 88, height: 88 }}>
             <svg viewBox={`${mapBounds.minX} ${mapBounds.minY} ${mapBounds.maxX - mapBounds.minX} ${mapBounds.maxY - mapBounds.minY}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
                <polygon points={spline.map(pt => `${pt.x},${pt.y}`).join(' ')} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth={(mapBounds.maxX-mapBounds.minX)*0.04} strokeLinejoin="round" />
                <polygon points={spline.map(pt => `${pt.x},${pt.y}`).join(' ')} fill="none" stroke="#FFF" strokeWidth={(mapBounds.maxX-mapBounds.minX)*0.015} strokeLinejoin="round" opacity="0.8" />
@@ -986,33 +1021,35 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       )}
 
       {!raceFinished && (
-        <div className="fixed top-4 right-4 z-50 flex items-center gap-2">
-          {/* Botão de Modo de Câmara */}
+        <div className="fixed top-3 right-3 z-50 flex items-center gap-1.5">
+          {/* Botão Ícone de Modo de Câmara */}
           <button
             type="button"
             onClick={cycleCameraMode}
-            className="bg-black/85 hover:bg-black text-yellow-400 font-black px-3 py-2 rounded-lg border border-yellow-500/50 shadow-lg text-xs flex items-center gap-1.5 transition-all active:scale-95"
-            title="Alternar Modo de Câmara (Tecla C)"
+            className="w-8 h-8 rounded-full bg-black/80 hover:bg-black text-yellow-400 border border-yellow-500/40 shadow-md flex items-center justify-center transition-all active:scale-90"
+            title={`Câmara: ${cameraModeUI === 'CHASE' ? 'Atrás' : cameraModeUI === 'CENTRAL' ? 'Topo' : 'Dinâmica'} (Tecla C)`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-            <span className="hidden sm:inline">CÂMARA:</span>
-            <span>{cameraModeUI === 'CHASE' ? 'ATRÁS' : cameraModeUI === 'CENTRAL' ? 'FIXO' : 'DINÂMICA'}</span>
           </button>
 
-          {/* Botão de Altitude / Zoom da Câmara */}
+          {/* Botão Ícone de Altitude / Zoom */}
           <button
             type="button"
             onClick={cycleZoomMode}
-            className="bg-black/85 hover:bg-black text-white hover:text-green-400 font-black px-3 py-2 rounded-lg border border-white/25 shadow-lg text-xs flex items-center gap-1.5 transition-all active:scale-95"
-            title="Ajustar Altura da Câmara (Tecla Z)"
+            className="w-8 h-8 rounded-full bg-black/80 hover:bg-black text-green-400 border border-white/20 shadow-md flex items-center justify-center transition-all active:scale-90"
+            title={`Altitude: ${zoomHeightMode === 'HIGH' ? 'Alta' : zoomHeightMode === 'MAX' ? 'Máxima' : 'Média'} (Tecla Z)`}
           >
-            <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" /></svg>
-            <span className="hidden sm:inline">ALTURA:</span>
-            <span>{zoomHeightMode === 'HIGH' ? 'ALTA' : zoomHeightMode === 'MAX' ? 'MÁXIMA' : 'MÉDIA'}</span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" /></svg>
           </button>
 
-          <button type="button" onClick={() => onBackToMenu([], 'quit')} className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-lg shadow-lg text-xs active:scale-95 transition-all">
-            DESISTIR
+          {/* Botão Ícone de Desistir */}
+          <button
+            type="button"
+            onClick={() => onBackToMenu([], 'quit')}
+            className="w-8 h-8 rounded-full bg-red-600/85 hover:bg-red-700 text-white shadow-md flex items-center justify-center transition-all active:scale-90"
+            title="Desistir da Corrida"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
         </div>
       )}
