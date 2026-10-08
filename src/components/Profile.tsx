@@ -8,10 +8,10 @@ function ProfileCarPreview({ type, p, s, h }: { type: 'F1'|'MOTO'|'DRIFT'|'RALLY
      if (!canvas) return;
      const ctx = canvas.getContext('2d');
      if (!ctx) return;
-     ctx.clearRect(0,0, 160, 100);
+     ctx.clearRect(0,0, 140, 80);
      ctx.save();
-     ctx.translate(80, 45);
-     ctx.scale(2.5, 2.5);
+     ctx.translate(70, 40);
+     ctx.scale(2.2, 2.2);
      if (type === 'F1') drawF1Car(ctx, p, s, h, false);
      else if (type === 'MOTO') drawMoto(ctx, p, s, h);
      else if (type === 'DRIFT') drawDriftCar(ctx, p, s);
@@ -20,7 +20,7 @@ function ProfileCarPreview({ type, p, s, h }: { type: 'F1'|'MOTO'|'DRIFT'|'RALLY
   }, [type, p, s, h]);
   return (
     <div className="relative flex flex-col items-center">
-       <canvas ref={canvasRef} width={160} height={100} className="block" />
+       <canvas ref={canvasRef} width={140} height={80} className="w-[100px] sm:w-[130px] h-[60px] sm:h-[75px] block pointer-events-none" />
        
        <div className="flex items-center gap-2 mt-2">
            <span className={`text-[10px] font-bold uppercase tracking-widest ${type === 'F1' ? 'text-[#E10600]' : 'text-gray-400'}`}>
@@ -162,11 +162,11 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#15151e] text-white p-8 overflow-y-auto">
+    <div className="w-full min-h-screen bg-[#15151e] text-white p-3.5 sm:p-8 overflow-y-auto">
       <div className="max-w-4xl mx-auto">
         <div className="flex justify-between items-end mb-8 border-b-2 border-gray-800 pb-4">
           <div>
-            <h1 className="text-4xl font-black italic tracking-tighter text-[#E10600]">GARAGEM DO PILOTO</h1>
+            <h1 className="text-2xl sm:text-4xl font-black italic tracking-tighter text-[#E10600]">GARAGEM DO PILOTO</h1>
             <p className="text-gray-400 font-bold tracking-widest uppercase text-sm mt-1">
               LICENÇA Nº {user.id.toString().padStart(6, '0')} — {user.role === 'admin' ? 'FIA ADMIN' : 'PILOTO'}
             </p>
@@ -179,10 +179,10 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-8">
           
           {/* IDENTIDADE E CARRO */}
-          <div className="bg-black/40 border border-gray-800 p-6 rounded-xl">
+          <div className="bg-black/40 border border-gray-800 p-3.5 sm:p-6 rounded-xl">
              <h2 className="text-sm text-gray-400 uppercase tracking-widest font-bold mb-6">Identidade & Máquina</h2>
              
              <div className="mb-6">
@@ -237,7 +237,7 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
              <button 
                 onClick={handleSave}
                 disabled={isSaving}
-                className="w-full py-4 mt-2 bg-[#E10600] text-white font-black italic hover:bg-white hover:text-[#E10600] transition-colors disabled:opacity-50"
+                className="w-full py-3 sm:py-3.5 mt-2 bg-[#E10600] rounded-xl text-xs sm:text-sm text-white font-black italic hover:bg-white hover:text-[#E10600] transition-colors disabled:opacity-50"
              >
                 {isSaving ? 'A GUARDAR...' : 'CONFIRMAR AFINAÇÕES'}
              </button>

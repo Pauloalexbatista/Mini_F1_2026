@@ -42,7 +42,7 @@ export function TrackPreview({ track }: { track: TrackDef }) {
   }, [track]);
 
   return (
-    <div className="relative overflow-hidden bg-[#15151e] shrink-0 w-full h-full min-h-[160px] flex items-center justify-center">
+    <div className="relative overflow-hidden bg-[#15151e] shrink-0 w-full h-full min-h-[120px] sm:min-h-[160px] max-h-[140px] sm:max-h-[140px] sm:max-h-[200px] flex items-center justify-center">
       <canvas 
         ref={canvasRef} 
         width={600} 

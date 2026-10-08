@@ -52,17 +52,17 @@ export function Auth({ onLogin }: AuthProps) {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#15151e] flex items-center justify-center p-4 py-8 overflow-y-auto">
+    <div className="min-h-screen w-full bg-[#15151e] flex items-center justify-center p-3 sm:p-6 py-6 overflow-y-auto">
       {/* Background Graphic Aesthetic */}
       <div className="absolute inset-0 z-0 pointer-events-none opacity-20"
         style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, #E10600 0%, transparent 40%)'}}
       />
       
-      <div className="z-10 bg-black/80 p-10 rounded-xl border-t-4 border-[#E10600] shadow-2xl w-full max-w-md backdrop-blur-md">
-        <h1 className="text-4xl font-black italic text-white mb-2 tracking-tighter">
+      <div className="z-10 bg-black/80 p-5 sm:p-8 rounded-xl border-t-4 border-[#E10600] shadow-2xl w-full max-w-sm sm:max-w-md backdrop-blur-md">
+        <h1 className="text-2xl sm:text-3xl font-black italic text-white mb-1.5 tracking-tighter">
           {isLogin ? 'CASA PARTIDA' : 'LICENÇA FIA'}
         </h1>
-        <p className="text-gray-400 mb-8 text-sm uppercase tracking-widest font-bold">
+        <p className="text-gray-400 mb-5 text-xs sm:text-sm uppercase tracking-widest font-bold">
           {isLogin ? 'Identificação do Piloto' : 'Registo Oficial de Pista'}
         </p>
 
@@ -72,7 +72,7 @@ export function Auth({ onLogin }: AuthProps) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 sm:gap-4">
           <div>
             <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Identificador F1 (Email / User)</label>
             <input 
@@ -114,7 +114,7 @@ export function Auth({ onLogin }: AuthProps) {
           <button 
             type="submit" 
             disabled={isLoading}
-            className="mt-4 w-full bg-[#E10600] hover:bg-white text-white hover:text-[#E10600] font-black italic text-xl py-4 transition-colors duration-300 disabled:opacity-50"
+            className="mt-3 w-full bg-[#E10600] hover:bg-white text-white hover:text-[#E10600] font-black italic text-base sm:text-lg py-3 rounded-xl transition-colors duration-300 disabled:opacity-50"
           >
             {isLoading ? 'A INICIAR MOTOR...' : (isLogin ? 'ENTRAR NO CÓCKPIT' : 'EMITIR LICENÇA')}
           </button>

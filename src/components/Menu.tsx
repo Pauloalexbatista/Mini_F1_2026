@@ -26,10 +26,10 @@ function MenuCarPreview({
      if (!canvas) return;
      const ctx = canvas.getContext('2d');
      if (!ctx) return;
-     ctx.clearRect(0,0, 160, 100);
+     ctx.clearRect(0,0, 140, 80);
      ctx.save();
-     ctx.translate(80, 50);
-     ctx.scale(3, 3);
+     ctx.translate(70, 40);
+     ctx.scale(2.2, 2.2);
      if (type === 'F1') drawF1Car(ctx, p, s || '#222', h || '#FFDD00', false);
      else if (type === 'MOTO') drawMoto(ctx, p, s || '#222', h || '#FFDD00');
      else if (type === 'DRIFT') drawDriftCar(ctx, p, s || '#222');
@@ -42,7 +42,7 @@ function MenuCarPreview({
   return (
     <div 
        onClick={() => { if (isAvailable && onSelect) onSelect(); }}
-       className={"relative flex flex-col items-center p-2.5 rounded-xl border-2 transition-all select-none " + (
+       className={"relative flex flex-col items-center p-1.5 sm:p-2 rounded-xl border-2 transition-all select-none " + (
          isSelected 
            ? "border-yellow-400 bg-yellow-400/10 shadow-[0_0_20px_rgba(250,204,21,0.35)] scale-105 cursor-pointer ring-2 ring-yellow-400/40" 
            : isAvailable 
@@ -50,10 +50,10 @@ function MenuCarPreview({
              : "border-gray-800/40 bg-black/20 opacity-35 cursor-not-allowed"
        )}
     >
-       <canvas ref={canvasRef} width={160} height={100} className="block pointer-events-none" />
+       <canvas ref={canvasRef} width={140} height={80} className="w-[105px] sm:w-[130px] h-[60px] sm:h-[75px] block pointer-events-none" />
        
        <div className="flex items-center gap-1.5 mt-2">
-           <span className={"text-[11px] font-black uppercase tracking-widest " + (isSelected ? "text-yellow-400 font-black" : "text-gray-300")}>
+           <span className={"text-[10px] sm:text-[11px] font-black uppercase tracking-wider " + (isSelected ? "text-yellow-400 font-black" : "text-gray-300")}>
                {type === 'F1' ? 'F1 2026' : type === 'DRIFT' ? 'DRIFT SPEC' : type}
            </span>
            {type === 'DRIFT' && !isSelected && (
@@ -74,21 +74,21 @@ function TrackTelemetryDisplay({ track }: { track: TrackDef }) {
   const telemetry = React.useMemo(() => getTrackTelemetry(track.nodes), [track]);
   
   return (
-    <div className="w-full bg-[#111116] border-t border-gray-800 p-3 grid grid-cols-4 gap-x-2 gap-y-3 text-center text-white pb-4 z-20 relative shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
+    <div className="w-full bg-[#111116] border-t border-gray-800 p-2 sm:p-2.5 grid grid-cols-4 gap-x-1 sm:gap-x-2 gap-y-1 text-center text-white pb-2.5 z-20 relative shadow-[0_-10px_20px_rgba(0,0,0,0.5)]">
        <div className="flex flex-col justify-center">
-          <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Extensão</span>
-          <span className="block text-lg font-black leading-none">{telemetry.lengthKm} <span className="text-[10px] text-gray-400">KM</span></span>
+          <span className="block text-[8px] sm:text-[9px] text-gray-500 font-bold uppercase tracking-wider leading-none mb-1">Extensão</span>
+          <span className="block text-sm sm:text-base font-black leading-none">{telemetry.lengthKm} <span className="text-[10px] text-gray-400">KM</span></span>
        </div>
        <div className="border-l border-gray-800 flex flex-col justify-center">
-          <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Curvas</span>
-          <span className="block text-lg font-black leading-none">{telemetry.corners}</span>
+          <span className="block text-[8px] sm:text-[9px] text-gray-500 font-bold uppercase tracking-wider leading-none mb-1">Curvas</span>
+          <span className="block text-sm sm:text-base font-black leading-none">{telemetry.corners}</span>
        </div>
        <div className="border-l border-gray-800 flex flex-col justify-center">
-          <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Top Speed</span>
+          <span className="block text-[8px] sm:text-[9px] text-gray-500 font-bold uppercase tracking-wider leading-none mb-1">Top Speed</span>
           <span className="block text-lg font-black text-[#E10600] leading-none">{telemetry.topSpeedKmh} <span className="text-[10px] text-gray-400">KM/H</span></span>
        </div>
        <div className="border-l border-gray-800 flex flex-col justify-center">
-          <span className="block text-[9px] text-gray-500 font-bold uppercase tracking-widest leading-none mb-1">Min Apex</span>
+          <span className="block text-[8px] sm:text-[9px] text-gray-500 font-bold uppercase tracking-wider leading-none mb-1">Min Apex</span>
           <span className="block text-lg font-black text-yellow-500 leading-none">{telemetry.minCornerKmh} <span className="text-[10px] text-gray-400">KM/H</span></span>
        </div>
     </div>
@@ -119,16 +119,16 @@ function TrackLeaderboard({ trackId }: { trackId: string }) {
     return `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}.${milli.toString().padStart(2,'0')}`;
   };
 
-  if (loading) return <div className="p-3 text-center text-[10px] text-gray-500 font-bold uppercase tracking-widest bg-[#0a0a0f] min-h-[140px] flex items-center justify-center">A CARREGAR TEMPOS...</div>;
+  if (loading) return <div className="p-3 text-center text-[10px] text-gray-500 font-bold uppercase tracking-widest bg-[#0a0a0f] py-2 flex items-center justify-center">A CARREGAR TEMPOS...</div>;
   if (!leaderboard || leaderboard.length === 0) return <div className="p-3 text-center text-[10px] text-gray-600 font-bold uppercase tracking-widest bg-[#0a0a0f] min-h-[140px] flex items-center justify-center border-t border-gray-800">SEM TEMPOS REGISTADOS</div>;
 
   return (
-    <div className="bg-[#0a0a0f] border-t border-gray-800 p-3 pt-4">
+    <div className="bg-[#0a0a0f] border-t border-gray-800 p-2 sm:p-2.5 pt-2.5">
       <h4 className="text-[10px] text-[#E10600] font-bold uppercase tracking-widest mb-2 flex items-center gap-1">
          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
          TOP 10 MUNDIAL
       </h4>
-      <div className="flex flex-col gap-1 max-h-[160px] overflow-y-auto pr-1">
+      <div className="flex flex-col gap-1 max-h-[100px] sm:max-h-[140px] overflow-y-auto pr-1">
          {leaderboard.map((entry, idx) => (
             <div key={idx} className="flex justify-between items-center bg-[#15151e] p-1.5 px-2 rounded border border-gray-800/50">
                <div className="flex items-center gap-2">
@@ -280,18 +280,18 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
 
 
   return (
-    <div className="min-h-screen bg-[#15151e] text-white font-f1 flex flex-col pt-0 pb-20 w-full overflow-x-hidden relative">
+    <div className="min-h-screen bg-[#15151e] text-white font-f1 flex flex-col pt-0 pb-20 sm:pb-8 w-full overflow-x-hidden relative">
       
       {/* Top Header - F1 Official Style */}
-      <header className={`bg-[#15151e] text-white flex items-center justify-between px-0 sm:px-6 py-0 border-t-4 border-[#E10600] z-20 shadow-md h-16 w-full sticky top-0 opacity-100`}>
+      <header className={`bg-[#15151e] text-white flex items-center justify-between px-0 sm:px-6 py-0 border-t-4 border-[#E10600] z-20 shadow-md h-14 sm:h-16 w-full sticky top-0 opacity-100`}>
         <div className="flex items-center w-full h-full max-w-7xl mx-auto">
           {/* F1 Logo Box */}
-          <div className="flex items-center justify-center bg-[#E10600] text-white font-black text-2xl sm:text-3xl px-3 sm:px-6 h-full mr-2 sm:mr-6 select-none relative z-30 transform -skew-x-12 -ml-2 sm:-ml-4">
+          <div className="flex items-center justify-center bg-[#E10600] text-white font-black text-xl sm:text-2xl px-2.5 sm:px-5 h-full mr-1.5 sm:mr-5 select-none relative z-30 transform -skew-x-12 -ml-1 sm:-ml-4">
             <span className="inline-block transform skew-x-12 mt-1 tracking-tighter">F1</span>
           </div>
           
           {/* Navigation Links (Tabs) */}
-          <nav className="flex items-center gap-3 sm:gap-6 text-xs sm:text-[13px] font-bold tracking-widest uppercase h-full pt-1">
+          <nav className="flex items-center gap-1.5 sm:gap-5 text-[10px] sm:text-xs font-bold tracking-wider sm:tracking-widest uppercase h-full pt-0.5">
             <button onClick={() => setActiveTab('overview')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'overview' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>PADDOCK</button>
             <button onClick={() => setActiveTab('teams')} className={`flex items-center h-full hover:text-white transition-colors border-b-2 ${activeTab === 'teams' ? 'border-[#E10600] text-gray-100' : 'border-transparent text-gray-400'}`}>GARAGEM</button>
             {/* TRACKS / Cria��o de pistas s� aparece no PC */}
@@ -302,7 +302,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
             </button>
           </nav>
 
-          <div className="ml-auto flex items-center gap-5">
+          <div className="ml-auto hidden sm:flex items-center gap-4">
              <div className="hidden lg:flex flex-col text-right mr-2 justify-center">
                 <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-[10px]">2026 FIA Formula One</span>
                 <span className="text-xs font-black text-white uppercase tracking-widest leading-[12px] mt-1">World Championship™</span>
@@ -316,7 +316,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                    // In a multiplayer lobby: wait for all humans to be ready
                    (!!activeEventId && (!isHostPlayer || lobbyState.length < 1 || !lobbyState.every((p: any) => p.isReady)))
                  }
-                 className="w-full sm:flex-1 bg-[#E10600] hover:bg-red-700 text-white disabled:bg-gray-800 disabled:text-gray-500 py-3 sm:py-5 px-6 rounded text-sm sm:text-base font-black italic tracking-widest uppercase transition-colors flex items-center justify-center gap-3 disabled:cursor-not-allowed group relative overflow-hidden"
+                 className="w-full sm:flex-1 bg-[#E10600] hover:bg-red-700 text-white disabled:bg-gray-800 disabled:text-gray-500 py-2.5 sm:py-3 px-4 sm:px-5 rounded-lg text-xs sm:text-sm font-black italic tracking-wider sm:tracking-widest uppercase transition-colors flex items-center justify-center gap-3 disabled:cursor-not-allowed group relative overflow-hidden"
               >
                  {selectedTracks.length === 0 ? (
                    'SELECIONE UMA PISTA...'
@@ -337,7 +337,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
       </header>
 
       {/* Main Content Area */}
-      <main className="max-w-[1400px] mx-auto px-4 sm:px-8 py-10 flex-1 w-full z-10 relative">
+      <main className="max-w-[1400px] mx-auto px-3 sm:px-8 py-4 sm:py-8 flex-1 w-full z-10 relative">
         
                   {activeTab === 'overview' && (
             <div className="animate-in fade-in duration-500">
@@ -528,16 +528,16 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
 
 {/* TEAMS CAROUSEL UI -> CHANGED TO GARAGE UI */}
         {activeTab === 'teams' && (
-           <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center min-h-[60vh]">
+           <div className="animate-in fade-in duration-500 flex flex-col items-center justify-center min-h-[50vh]">
              <div className="mb-6 border-b border-gray-800 pb-4 text-center w-full max-w-4xl">
-                <h2 className="text-4xl font-black text-white uppercase tracking-tighter italic">A TUA GARAGEM</h2>
-                <p className="text-gray-500 font-bold uppercase tracking-widest mt-2">Configura a tua máquina para a próxima corrida. Mais veículos chegarão no futuro.</p>
+                <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tighter italic">A TUA GARAGEM</h2>
+                <p className="text-gray-400 font-bold uppercase tracking-wider text-[11px] sm:text-xs mt-1">Personaliza o teu veículo e estilo de corrida.</p>
              </div>
 
-             <div className="w-full max-w-4xl bg-[#1a1a24] border-2 border-gray-800 rounded-2xl p-6 flex flex-col md:flex-row gap-6 items-center justify-between shadow-[0_20px_50px_rgba(0,0,0,0.5)]">
+             <div className="w-full max-w-4xl bg-[#1a1a24] border border-gray-800 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 flex flex-col md:flex-row gap-4 sm:gap-6 items-center justify-between shadow-2xl">
                 
                 <div className="w-full md:w-1/2 flex flex-col gap-6">
-                   <div className="flex items-center justify-between border-b-2 border-[#E10600] pb-2 mb-2"><h3 className="text-white font-black text-2xl uppercase tracking-widest">{players[0]?.vehicleType === 'DRIFT' ? 'Classe: Drift Spec (JDM)' : 'Classe: F1 2026'}</h3><span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-gray-300">{players[0]?.vehicleType === 'DRIFT' ? 'Power Slide RWD' : 'Downforce Máximo'}</span></div>
+                   <div className="flex items-center justify-between border-b-2 border-[#E10600] pb-2 mb-2"><h3 className="text-white font-black text-lg sm:text-xl uppercase tracking-wider">{players[0]?.vehicleType === 'DRIFT' ? 'Classe: Drift Spec (JDM)' : 'Classe: F1 2026'}</h3><span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-gray-300">{players[0]?.vehicleType === 'DRIFT' ? 'Power Slide RWD' : 'Downforce Máximo'}</span></div>
                    
                    <div>
                       <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-2 font-bold shadow-sm">Cor Primária (Carroçaria)</label>
@@ -562,7 +562,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                 </div>
 
                 <div className="w-full md:w-1/2 flex justify-center mt-6 md:mt-0">
-                   <div className="bg-black/80 rounded-2xl p-6 border border-gray-700 shadow-[inset_0_10px_30px_rgba(0,0,0,0.8)] w-full flex flex-col items-center">
+                   <div className="bg-black/70 rounded-xl sm:rounded-2xl p-3 sm:p-4 border border-gray-700/80 shadow-inner w-full flex flex-col items-center">
                       <div className="grid grid-cols-2 gap-3 w-full mb-4">
                          <MenuCarPreview 
                             type="F1" 
@@ -593,7 +593,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
 
              </div>
 
-             <div className="mt-10 mb-10 text-center w-full max-w-4xl flex flex-col items-center">
+             <div className="mt-5 mb-5 text-center w-full max-w-4xl flex flex-col items-center">
                  <button 
                    onClick={async () => {
                       if (user) {
@@ -629,7 +629,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                          } catch(e) { console.error("Failed saving Garage colors", e); }
                       }
                    }}
-                   className="w-full max-w-[300px] bg-[#E10600] text-white font-black uppercase tracking-widest px-12 py-5 rounded-xl hover:bg-white hover:text-[#E10600] transition-colors shadow-[0_0_20px_rgba(225,6,0,0.4)]"
+                   className="w-full max-w-xs bg-[#E10600] text-white font-black uppercase tracking-wider text-xs sm:text-sm py-3 sm:py-3.5 px-6 rounded-xl hover:bg-white hover:text-[#E10600] transition-colors shadow-lg"
                  >
                    GUARDAR CONFIGURAÇÃO
                  </button>
@@ -642,7 +642,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
            <div className="animate-in fade-in duration-500">
              <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-gray-800 pb-4 gap-4">
                 <div>
-                  <h2 className="text-3xl font-black text-white uppercase tracking-tighter">SELECT YOUR TRACK</h2>
+                  <h2 className="text-xl sm:text-3xl font-black text-white uppercase tracking-tighter">SELECT YOUR TRACK</h2>
                   <p className="text-xs text-gray-400 font-bold uppercase tracking-wider mt-1">
                     {selectedTracks.length} pista{selectedTracks.length !== 1 ? 's' : ''} selecionada{selectedTracks.length !== 1 ? 's' : ''} para a corrida
                   </p>
@@ -704,7 +704,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
              )}
 
              {ALL_TRACKS.length > 0 ? (
-               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-8 w-full">
+               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6 pb-8 w-full">
                  {sortedTracks.map((t, i) => {
                     const isSelected = selectedTracks.includes(t.id);
                     const playlistIndex = selectedTracks.indexOf(t.id);
@@ -719,7 +719,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                         }}
                         className={`cursor-pointer w-full flex flex-col h-full bg-[#15151e] rounded-2xl overflow-hidden transition-all duration-300 border-4 ${isSelected ? 'border-[#E10600] shadow-[0_15px_40px_rgba(225,6,0,0.4)] transform md:-translate-y-2 z-10 relative' : 'border-gray-800 opacity-95 hover:opacity-100 hover:border-gray-600 hover:-translate-y-1'}`}
                       >
-                         <div className="p-6 border-b border-gray-800 bg-[#15151e] z-10 relative">
+                         <div className="p-3.5 sm:p-4 border-b border-gray-800 bg-[#15151e] z-10 relative">
                              {/* APAGAR PISTA (Só permite se não for sistema) */}
                              {!isSystemTrack && (
                                <button
@@ -743,7 +743,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                                 <span className="text-[11px] font-black text-gray-500 uppercase tracking-widest block bg-gray-900 rounded px-2 py-0.5 border border-gray-700">SEM SELEÇÃO</span>
                              )}
                            </div>
-                           <h3 className="text-2xl lg:text-3xl font-black uppercase text-white tracking-tighter leading-tight mb-1 break-words w-[80%]">{t.name}</h3>
+                           <h3 className="text-lg sm:text-2xl font-black uppercase text-white tracking-tighter leading-tight mb-0.5 break-words w-[80%]">{t.name}</h3>
                            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">{getCountry(t.name)}</p>
                          </div>
                          
@@ -756,7 +756,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                          <TrackTelemetryDisplay track={t} />
                          <TrackLeaderboard trackId={t.id.toString()} />
 
-                         <div className="p-3 sm:p-4 bg-gray-900 border-t border-gray-800 flex items-center justify-between gap-2 mt-auto">
+                         <div className="p-2 sm:p-3 bg-gray-900 border-t border-gray-800 flex items-center justify-between gap-2 mt-auto">
                             <button
                                type="button"
                                onClick={(e) => {
@@ -767,7 +767,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                                     setSelectedTracks([t.id]);
                                  }
                                }}
-                               className={`flex-1 py-3 px-2 uppercase tracking-widest text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                               className={`flex-1 py-2.5 px-2 uppercase tracking-wider text-[10px] sm:text-[11px] font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
                                  isSelected 
                                    ? 'bg-gray-800 text-green-400 border border-green-500/40' 
                                    : 'bg-[#1e1e28] text-white border border-gray-700 hover:border-[#E10600]'
@@ -783,7 +783,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                                  setSelectedTracks([t.id]);
                                  setTimeout(() => onStart(), 30);
                                }}
-                               className="flex-1 bg-[#E10600] active:bg-red-700 hover:bg-white hover:text-[#E10600] text-white font-black py-3 px-2 uppercase tracking-widest text-[11px] rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(225,6,0,0.5)]"
+                               className="flex-1 bg-[#E10600] active:bg-red-700 hover:bg-white hover:text-[#E10600] text-white font-black py-2.5 px-2 uppercase tracking-wider text-[10px] sm:text-[11px] rounded-lg transition-all flex items-center justify-center gap-1.5 shadow-[0_0_15px_rgba(225,6,0,0.5)]"
                             >
                                🏎️ CORRER AGORA
                             </button>
@@ -821,6 +821,29 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
            </div>
         )}
       </main>
+
+      {/* Quick Action Mobile Floating Bar */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#15151e]/95 backdrop-blur-md border-t-2 border-[#E10600] px-3 py-2 flex items-center justify-between gap-2 shadow-[0_-8px_25px_rgba(0,0,0,0.8)]">
+        <div className="flex flex-col min-w-0 pr-1">
+          <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider truncate">
+            {selectedTracks.length > 0 ? (activeTrackObj?.name || 'Pista Selecionada') : 'Nenhuma Pista'}
+          </span>
+          <span className="text-[10px] text-yellow-400 font-black uppercase tracking-widest">
+            {players[0]?.vehicleType === 'DRIFT' ? 'DRIFT SPEC' : 'F1 2026'}
+          </span>
+        </div>
+        <button
+          onClick={onStart}
+          disabled={
+            ALL_TRACKS.length === 0 ||
+            selectedTracks.length === 0 ||
+            (!!activeEventId && (!isHostPlayer || lobbyState.length < 1 || !lobbyState.every((p: any) => p.isReady)))
+          }
+          className="bg-[#E10600] hover:bg-red-700 disabled:bg-gray-800 disabled:text-gray-500 text-white font-black italic uppercase tracking-wider px-4 py-2.5 rounded-lg text-xs flex items-center gap-1.5 shadow-md flex-shrink-0"
+        >
+          {selectedTracks.length === 0 ? 'ESCOLHER PISTA' : activeEventId ? (isHostPlayer ? 'LANÇAR CORRIDA' : 'AGUARDAR...') : 'CORRER AGORA'}
+        </button>
+      </div>
     </div>
   );
 }
