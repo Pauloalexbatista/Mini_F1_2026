@@ -268,6 +268,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
         color: p.color,
         color2: p.color2,
         helmetColor: p.helmetColor,
+        vehicleType: p.vehicleType || 'F1',
         isBot: p.isBot || false,
         isLocal: p.isLocal || false,
         givenUp: false,

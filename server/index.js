@@ -298,6 +298,7 @@ io.on('connection', (socket) => {
          color: data.color,
          color2: data.color2,
          helmetColor: data.helmetColor,
+         vehicleType: data.vehicleType || 'F1',
          eventId: null,
          isReady: false,
          status: 'available' // available, racing

@@ -624,6 +624,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                                color: players[0]?.color,
                                color2: players[0]?.color2,
                                helmetColor: players[0]?.helmetColor,
+                               vehicleType: players[0]?.vehicleType || 'F1',
                            });
                          } catch(e) { console.error("Failed saving Garage colors", e); }
                       }

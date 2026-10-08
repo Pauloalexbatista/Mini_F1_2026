@@ -130,7 +130,7 @@ export default function App() {
       isBot: false,
       isLocal: true,
       difficulty: 1.0,
-      vehicleType: 'F1'
+      vehicleType: ((typeof window !== 'undefined' ? localStorage.getItem('f1_vehicle_type') : null) as any) || 'F1'
     }
   ]);
 
@@ -144,6 +144,7 @@ export default function App() {
             color: players[0]?.color || user.primary_color || '#E10600',
             color2: players[0]?.color2 || user.secondary_color || '#000000',
             helmetColor: players[0]?.helmetColor || user.helmet_color || '#FFDD00',
+            vehicleType: players[0]?.vehicleType || 'F1',
         });
 
         const onGlobalRoster = (roster: any[]) => setGlobalRoster(roster);
@@ -212,6 +213,9 @@ export default function App() {
   const handleUpdatePlayer = (index: number, config: PlayerConfig) => {
     const newPlayers = [...players];
     newPlayers[index] = config;
+    if (index === 0 && config.vehicleType) {
+      try { localStorage.setItem('f1_vehicle_type', config.vehicleType); } catch(e){}
+    }
     setPlayers(newPlayers);
   };
 
