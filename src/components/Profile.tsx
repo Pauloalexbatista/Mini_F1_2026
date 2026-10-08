@@ -18,7 +18,7 @@ function ProfileCarPreview({ type, p, s, h, isSelected, onSelect }: { type: 'F1'
      else drawRallyCar(ctx, p, s);
      ctx.restore();
   }, [type, p, s, h]);
-  const isAvailable = type === 'F1' || type === 'DRIFT';
+  const isAvailable = true;
 
   return (
     <div 
@@ -232,8 +232,8 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 w-full px-2">
                        <ProfileCarPreview type="F1" p={primaryColor} s={secondaryColor} h={helmetColor} isSelected={(players[0]?.vehicleType || 'F1') === 'F1'} onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: 'F1' })} />
                        <ProfileCarPreview type="DRIFT" p={primaryColor} s={secondaryColor} h={helmetColor} isSelected={players[0]?.vehicleType === 'DRIFT'} onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: 'DRIFT' })} />
-                       <ProfileCarPreview type="MOTO" p={primaryColor} s={secondaryColor} h={helmetColor} />
-                       <ProfileCarPreview type="RALLY" p={primaryColor} s={secondaryColor} h={helmetColor} />
+                       <ProfileCarPreview type="MOTO" p={primaryColor} s={secondaryColor} h={helmetColor} isSelected={players[0]?.vehicleType === 'MOTO'} onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: 'MOTO' })} />
+                       <ProfileCarPreview type="RALLY" p={primaryColor} s={secondaryColor} h={helmetColor} isSelected={players[0]?.vehicleType === 'RALLY'} onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: 'RALLY' })} />
                    </div>
                 </div>
              </div>

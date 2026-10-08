@@ -755,25 +755,85 @@ export function drawF1Car(ctx: CanvasRenderingContext2D, pColor: string, sColor:
   ctx.stroke();
 }
 
-export function drawMoto(ctx: CanvasRenderingContext2D, pColor: string, sColor: string, helmetColor: string = '#FFDD00') {
-  // Moto Chassis
-  ctx.fillStyle = sColor;
-  ctx.fillRect(-12, -3, 24, 6);
-  // Tank/Fairing
-  ctx.fillStyle = pColor;
-  ctx.fillRect(-5, -4, 15, 8);
-  ctx.beginPath(); ctx.moveTo(10, -4); ctx.lineTo(18, -1); ctx.lineTo(18, 1); ctx.lineTo(10, 4); ctx.fill();
-  
-  // Wheels
+export function drawMoto(ctx: CanvasRenderingContext2D, pColor: string, sColor: string, helmetColor: string = '#FFDD00', steer: number = 0) {
+  const lean = Math.max(-1, Math.min(1, steer)) * 2.5;
+
+  // 1. Soft Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  ctx.fillRect(-15, -6 + lean * 0.5, 30, 12);
+
+  // 2. Wheels (Slim Racing Slicks)
   ctx.fillStyle = '#111';
-  ctx.fillRect(14, -2, 6, 4); // Front
-  ctx.fillRect(-16, -3, 8, 6); // Rear
-  
-  // Pilot Helmet & Shoulders
+  ctx.fillRect(11, -2, 7.5, 4);   // Front tire
+  ctx.fillRect(-15, -2.5, 8.5, 5); // Rear tire
+  // Rim Accents (Secondary Color)
+  ctx.fillStyle = sColor || '#E10600';
+  ctx.fillRect(13, -1, 3.5, 2);
+  ctx.fillRect(-13, -1.2, 4, 2.4);
+
+  // 3. Moto Chassis & Swingarm
+  ctx.fillStyle = '#222';
+  ctx.fillRect(-11, -3 + lean * 0.3, 22, 6);
+
+  // 4. Main Fairing & Tank (Aerodynamic MotoGP Body)
   ctx.fillStyle = pColor;
-  ctx.beginPath(); ctx.arc(-2, 0, 4, 0, Math.PI*2); ctx.fill(); // shoulders
-  ctx.fillStyle = helmetColor;
-  ctx.beginPath(); ctx.arc(1, 0, 3, 0, Math.PI*2); ctx.fill(); // helmet
+  ctx.beginPath();
+  ctx.moveTo(15, -3 + lean * 0.6);
+  ctx.lineTo(17, 0 + lean * 0.6);
+  ctx.lineTo(15, 3 + lean * 0.6);
+  ctx.lineTo(8, 4.5 + lean * 0.5);
+  ctx.lineTo(-6, 3.5 + lean * 0.4);
+  ctx.lineTo(-12, 1.5 + lean * 0.3);
+  ctx.lineTo(-12, -1.5 + lean * 0.3);
+  ctx.lineTo(-6, -3.5 + lean * 0.4);
+  ctx.lineTo(8, -4.5 + lean * 0.5);
+  ctx.closePath();
+  ctx.fill();
+
+  // MotoGP Aero Winglets
+  ctx.fillStyle = sColor || '#151515';
+  ctx.fillRect(11, -5.5 + lean * 0.5, 3, 2);
+  ctx.fillRect(11, 3.5 + lean * 0.5, 3, 2);
+
+  // Windshield (Dark Tint)
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.moveTo(14, -2.5 + lean * 0.6);
+  ctx.lineTo(16, 0 + lean * 0.6);
+  ctx.lineTo(14, 2.5 + lean * 0.6);
+  ctx.lineTo(10, 2 + lean * 0.5);
+  ctx.lineTo(10, -2 + lean * 0.5);
+  ctx.closePath();
+  ctx.fill();
+
+  // 5. Rider Body Leaning into Corner
+  ctx.fillStyle = sColor || '#222';
+  ctx.beginPath();
+  ctx.ellipse(-1, lean * 0.8, 5, 3.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Pilot Helmet
+  ctx.fillStyle = helmetColor || '#FFDD00';
+  ctx.beginPath();
+  ctx.arc(2, lean * 1.1, 3.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Visor
+  ctx.fillStyle = '#111';
+  ctx.fillRect(3.2, -1.2 + lean * 1.1, 2.2, 2.4);
+
+  // Knee Slider (Touches down when leaning)
+  if (Math.abs(lean) > 0.8) {
+    ctx.fillStyle = '#E5A93C';
+    const kneeY = lean > 0 ? (4.5 + lean) : (-4.5 + lean);
+    ctx.fillRect(-2, kneeY - 1, 3.5, 2);
+  }
+
+  // 6. Titanium Exhaust
+  ctx.fillStyle = '#777';
+  ctx.fillRect(-14, 2.8, 4, 1.4);
+  ctx.fillStyle = '#00E5FF';
+  ctx.fillRect(-15, 2.8, 1, 1.4);
 }
 
 export function drawDriftCar(ctx: CanvasRenderingContext2D, pColor: string, sColor: string) {
@@ -871,37 +931,98 @@ export function drawDriftCar(ctx: CanvasRenderingContext2D, pColor: string, sCol
 }
 
 export function drawRallyCar(ctx: CanvasRenderingContext2D, pColor: string, sColor: string) {
-  // Main Body (Compact Hatchback)
+  // 1. Soft Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(-16, -11, 32, 22);
+
+  // 2. Chunky Gravel / Tarmac Wheels with White OZ Rims
+  ctx.fillStyle = '#111';
+  ctx.fillRect(7, -12, 7.5, 3.8);   // Front Left
+  ctx.fillRect(7, 8.2, 7.5, 3.8);    // Front Right
+  ctx.fillRect(-12, -12, 7.5, 3.8);  // Rear Left
+  ctx.fillRect(-12, 8.2, 7.5, 3.8);   // Rear Right
+
+  // White Rally OZ Racing Alloy Centers
+  ctx.fillStyle = '#F8FAFC';
+  ctx.fillRect(9, -11.2, 3.5, 1.8);
+  ctx.fillRect(9, 9.2, 3.5, 1.8);
+  ctx.fillRect(-10, -11.2, 3.5, 1.8);
+  ctx.fillRect(-10, 9.2, 3.5, 1.8);
+
+  // 3. Widebody Flared Arches (WRC Spec)
+  ctx.fillStyle = sColor || '#1a1a24';
+  ctx.fillRect(6, -10.5, 8.5, 21);
+  ctx.fillRect(-13, -10.5, 8.5, 21);
+
+  // 4. Main Sculpted Hatchback Body
   ctx.fillStyle = pColor;
   ctx.beginPath();
-  ctx.moveTo(-12, -9); ctx.lineTo(12, -8); ctx.lineTo(14, -5);
-  ctx.lineTo(14, 5); ctx.lineTo(12, 8); ctx.lineTo(-12, 9);
+  ctx.moveTo(14, -6);
+  ctx.lineTo(15.5, -3.5);
+  ctx.lineTo(15.5, 3.5);
+  ctx.lineTo(14, 6);
+  ctx.lineTo(6, 8.5);
+  ctx.lineTo(-12, 8.5);
+  ctx.lineTo(-14, 6);
+  ctx.lineTo(-14, -6);
+  ctx.lineTo(-12, -8.5);
+  ctx.lineTo(6, -8.5);
+  ctx.closePath();
   ctx.fill();
-  
-  // Roof 
-  ctx.fillStyle = sColor;
-  ctx.fillRect(-4, -7, 10, 14);
-  // Scoop
-  ctx.fillStyle = '#111';
-  ctx.fillRect(0, -2, 3, 4); 
-  
-  // Windows
-  ctx.fillStyle = '#222';
-  ctx.fillRect(6, -6, 3, 12);
-  
-  // Mudflaps
-  ctx.fillStyle = '#E10600';
-  ctx.fillRect(-13, -11, 2, 4);
-  ctx.fillRect(-13, 7, 2, 4);
-  
-  // Thick Wheels
-  ctx.fillStyle = '#222';
-  ctx.fillRect(7, -11, 6, 4);
-  ctx.fillRect(7, 7, 6, 4);
-  ctx.fillRect(-11, -11, 6, 4);
-  ctx.fillRect(-11, 7, 6, 4);
 
-  ctx.stroke();
+  // Front Carbon Lip & Grille
+  ctx.fillStyle = '#111';
+  ctx.fillRect(14.5, -6, 2, 12);
+
+  // 5. Quad Night-Pod Rally Spotlights (Iconic WRC feature!)
+  ctx.fillStyle = '#FFF9C4'; // Bright Xenon/Yellow Lenses
+  ctx.beginPath(); ctx.arc(14.5, -3.5, 1.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(14.5, -1.2, 1.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(14.5, 1.2, 1.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(14.5, 3.5, 1.4, 0, Math.PI * 2); ctx.fill();
+
+  // 6. Cockpit & Dark Glass
+  ctx.fillStyle = '#0f172a';
+  ctx.beginPath();
+  ctx.moveTo(5, -5.5);
+  ctx.lineTo(5, 5.5);
+  ctx.lineTo(-7, 6);
+  ctx.lineTo(-7, -6);
+  ctx.closePath();
+  ctx.fill();
+
+  // Windshield Glass Highlight
+  ctx.fillStyle = 'rgba(125, 211, 252, 0.4)';
+  ctx.beginPath();
+  ctx.moveTo(4.5, -5);
+  ctx.lineTo(4.5, 5);
+  ctx.lineTo(2, 4);
+  ctx.lineTo(2, -4);
+  ctx.closePath();
+  ctx.fill();
+
+  // Roof & Active Ram-Air Scoop
+  ctx.fillStyle = sColor || '#222';
+  ctx.fillRect(-5.5, -5, 8.5, 10);
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, -2, 3.5, 4); // Roof scoop intake
+
+  // 7. Iconic Red Rally Mudflaps (Protects from gravel/mud)
+  ctx.fillStyle = '#E10600';
+  ctx.fillRect(-14.5, -12, 1.8, 3.8);
+  ctx.fillRect(-14.5, 8.2, 1.8, 3.8);
+
+  // 8. Large WRC Bi-Plane Rear Wing
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(-16, -9.5, 3.2, 19);
+  // Endplates matching primary color
+  ctx.fillStyle = pColor;
+  ctx.fillRect(-17, -10, 4, 1.8);
+  ctx.fillRect(-17, 8.2, 4, 1.8);
+
+  // 9. Rally Exhaust
+  ctx.fillStyle = '#888';
+  ctx.fillRect(-16, 4, 2.5, 2);
 }
 
 export function drawBridges3D(ctx: CanvasRenderingContext2D, spline: SplineNode[]) {

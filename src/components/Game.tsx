@@ -3,7 +3,7 @@ import { PlayerConfig, getSetupFromSpeed } from '../types';
 import { TrackDef, computeSpline, getTrackTelemetry } from '../tracks';
 import { audio } from '../audio';
 import { updateCarPhysics, CarPhysics } from '../physics';
-import { drawTrack, drawEnvironments, drawF1Car, drawDriftCar, drawBridges3D } from '../renderer';
+import { drawTrack, drawEnvironments, drawF1Car, drawDriftCar, drawMoto, drawRallyCar, drawBridges3D } from '../renderer';
 import { drawAllTrackProps } from '../trackProps';
 import { TrackPreview } from './TrackPreview';
 import { socket } from '../socket';
@@ -513,7 +513,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           audio.updateEngine(car.id, speed_val_final * 0.36, car.throttle, car.isBot);
 
           if (!isFinished && (car.isLocal || (car.isBot && isHost))) {
-              const skidMinSpd = car.vehicleType === 'DRIFT' ? 35 : 100; const skidW = car.vehicleType === 'DRIFT' ? 25 : 22;
+              const skidMinSpd = (car.vehicleType === 'DRIFT' || car.vehicleType === 'RALLY') ? 35 : car.vehicleType === 'MOTO' ? 50 : 100; const skidW = car.vehicleType === 'MOTO' ? 9 : car.vehicleType === 'DRIFT' ? 25 : car.vehicleType === 'RALLY' ? 24 : 22;
               if (speed_val_final > skidMinSpd && car.isSkidding) { skidMarksRef.current.push({ x: car.x, y: car.y, a: car.angle, w: skidW }); if (skidMarksRef.current.length > 3000) skidMarksRef.current.shift(); }
               if (closestIndex > car.currentWaypoint && closestIndex < car.currentWaypoint + 400) car.currentWaypoint = closestIndex;
               if ((closestIndex < spline.length * 0.1 || closestIndex < 30) && car.currentWaypoint > spline.length * 0.7) {
@@ -674,9 +674,9 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       ctx.translate(Math.round(-cameraRef.current.x), Math.round(-cameraRef.current.y));
       drawTrack(ctx, spline, pitSpline, false); drawEnvironments(ctx, spline, pitSpline, false); drawAllTrackProps(ctx, track.props, "ground");
       skidMarksRef.current.forEach(sm => { ctx.save(); ctx.translate(sm.x, sm.y); ctx.rotate(sm.a); ctx.fillStyle='rgba(10,10,10,0.5)'; ctx.fillRect(-sm.w/2, -5, sm.w, 10); ctx.restore(); });
-      carsRef.current.forEach(c => { if (spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); if (c.vehicleType === 'DRIFT') { drawDriftCar(ctx, c.color, c.color2 || '#222'); } else { drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); } ctx.restore(); });
+      carsRef.current.forEach(c => { if (spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); if (c.vehicleType === 'DRIFT') { drawDriftCar(ctx, c.color, c.color2 || '#222'); } else if (c.vehicleType === 'MOTO') { drawMoto(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.steer); } else if (c.vehicleType === 'RALLY') { drawRallyCar(ctx, c.color, c.color2 || '#222'); } else { drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); } ctx.restore(); });
       drawBridges3D(ctx, spline);
-      carsRef.current.forEach(c => { if (!spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); if (c.vehicleType === 'DRIFT') { drawDriftCar(ctx, c.color, c.color2 || '#222'); } else { drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); } ctx.restore(); });
+      carsRef.current.forEach(c => { if (!spline[c.currentWaypoint % spline.length]?.isBridge) return; ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.angle); ctx.scale(1.5, 1.5); if (c.vehicleType === 'DRIFT') { drawDriftCar(ctx, c.color, c.color2 || '#222'); } else if (c.vehicleType === 'MOTO') { drawMoto(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.steer); } else if (c.vehicleType === 'RALLY') { drawRallyCar(ctx, c.color, c.color2 || '#222'); } else { drawF1Car(ctx, c.color, c.color2 || '#222', c.helmetColor || '#FFDD00', c.drsEnabled); } ctx.restore(); });
       ctx.restore();
 
       const hX = GAME_WIDTH/2, hY = GAME_HEIGHT-80; ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(hX-290, hY, 580, 60); ctx.fillStyle = '#FFF'; ctx.fillRect(hX-270, hY+10, 85, 40);

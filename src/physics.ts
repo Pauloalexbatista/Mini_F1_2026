@@ -2,7 +2,7 @@ import { CarSetupStats } from './types';
 
 export interface CarPhysics {
   id: number;
-  vehicleType?: 'F1' | 'DRIFT';
+  vehicleType?: 'F1' | 'DRIFT' | 'MOTO' | 'RALLY';
   x: number;
   y: number;
   vx: number; // velocity vector X
@@ -75,14 +75,38 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
       gripPenalty *= tireCliff;
   }
 
+  const isRally = car.vehicleType === 'RALLY';
+  const isMoto = car.vehicleType === 'MOTO';
+  const isDrift = car.vehicleType === 'DRIFT';
+
   if (surface === 'GRASS') {
-    gripPenalty *= 0.55; accelPenalty *= 0.6; dragPenalty *= 2.0; maxSpeedMod *= 0.4; // Reduzido o castigo (era 0.3). Permite aos jogadores virarem o volante para se salvarem.
+    if (isRally) {
+      // Rally WRC 4WD: quase imune a relva/terra (excelente vantagem em atalhos!)
+      gripPenalty *= 0.92; accelPenalty *= 0.95; dragPenalty *= 1.15; maxSpeedMod *= 0.95;
+    } else if (isMoto) {
+      // Moto em relva: instável e escorregadia
+      gripPenalty *= 0.45; accelPenalty *= 0.50; dragPenalty *= 2.2; maxSpeedMod *= 0.35;
+    } else {
+      gripPenalty *= 0.55; accelPenalty *= 0.6; dragPenalty *= 2.0; maxSpeedMod *= 0.4;
+    }
   } else if (surface === 'CURB_APEX') {
-    gripPenalty *= 0.6; accelPenalty *= 0.6; dragPenalty *= 3.5; maxSpeedMod *= 0.7; // 30% penalty
+    if (isRally) {
+      gripPenalty *= 0.90; accelPenalty *= 0.92; dragPenalty *= 1.2; maxSpeedMod *= 0.92;
+    } else {
+      gripPenalty *= 0.6; accelPenalty *= 0.6; dragPenalty *= 3.5; maxSpeedMod *= 0.7;
+    }
   } else if (surface === 'CURB_WIDE') {
-    gripPenalty *= 0.75; accelPenalty *= 0.75; dragPenalty *= 2.5; maxSpeedMod *= 0.8; // 20% penalty
+    if (isRally) {
+      gripPenalty *= 0.94; accelPenalty *= 0.96; dragPenalty *= 1.15; maxSpeedMod *= 0.95;
+    } else {
+      gripPenalty *= 0.75; accelPenalty *= 0.75; dragPenalty *= 2.5; maxSpeedMod *= 0.8;
+    }
   } else if (surface === 'CURB') {
-    gripPenalty *= 0.9; accelPenalty *= 0.95; dragPenalty *= 1.2; maxSpeedMod *= 0.9; // 10% penalty
+    if (isRally) {
+      gripPenalty *= 0.98; accelPenalty *= 0.98; dragPenalty *= 1.05; maxSpeedMod *= 0.98;
+    } else {
+      gripPenalty *= 0.9; accelPenalty *= 0.95; dragPenalty *= 1.2; maxSpeedMod *= 0.9;
+    }
   }
 
   if (car.slipstreamActive) {
@@ -112,31 +136,52 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
   let longAccel = tractionAccel + resistanceAccel;
 
   // 3. Apply Steering and Lateral Grip
-  const isDriftCar = car.vehicleType === 'DRIFT';
-
   if (Math.abs(forwardVel) > 10) {
-    if (isDriftCar) {
+    if (isDrift) {
       // Drift steering: snappy, high-angle turn with power oversteer
       const turnRadius = 28 + (Math.abs(forwardVel) * 0.95);
       let steerTurn = (forwardVel / turnRadius) * car.steer;
-      // Oversteer kick when throttling into a turn
       if (car.throttle > 0.1 && Math.abs(car.steer) > 0.05) {
         steerTurn += car.steer * 2.2 * car.throttle;
       }
       car.angularVelocity = steerTurn;
+    } else if (isMoto) {
+      // Moto steering: ultra-ágil, rápida mudança de trajetória
+      const turnRadius = 24 + (Math.abs(forwardVel) * 0.75);
+      let steerTurn = (forwardVel / turnRadius) * car.steer * 1.25;
+      car.angularVelocity = steerTurn * gripPenalty;
+    } else if (isRally) {
+      // Rally steering: AWD power-slide com tração dianteira a puxar à saída
+      const turnRadius = 30 + (Math.abs(forwardVel) * 1.05);
+      let steerTurn = (forwardVel / turnRadius) * car.steer;
+      if (car.throttle > 0.2 && Math.abs(car.steer) > 0.1) {
+        steerTurn += car.steer * 0.9 * car.throttle; // AWD pivot
+      }
+      car.angularVelocity = steerTurn * gripPenalty;
     } else {
       const speedFactor = 1.8 / gripPenalty;
       const turnRadius = 40 + (Math.abs(forwardVel) * speedFactor); 
       car.angularVelocity = (forwardVel / turnRadius) * car.steer * gripPenalty;
     }
   } else {
-    car.angularVelocity = car.steer * (isDriftCar ? 2.8 : 2.0) * gripPenalty;
+    car.angularVelocity = car.steer * (isDrift ? 2.8 : isMoto ? 3.2 : isRally ? 2.4 : 2.0) * gripPenalty;
   }
   car.angle += car.angularVelocity * dt;
 
   // Lateral acceleration (Tire Grip)
-  const corneringStiffnessAccel = (isDriftCar ? 2200.0 : 5000.0) * car.grip * gripPenalty;
-  const maxLateralAccel = (isDriftCar ? 900.0 : 1500.0) * car.grip * gripPenalty; 
+  const corneringStiffnessAccel = (
+    isDrift ? 2200.0 :
+    isMoto ? 4200.0 :
+    isRally ? 3600.0 :
+    5000.0
+  ) * car.grip * gripPenalty;
+
+  const maxLateralAccel = (
+    isDrift ? 900.0 :
+    isMoto ? 1350.0 :
+    isRally ? 1150.0 :
+    1500.0
+  ) * car.grip * gripPenalty; 
   
   let slipAngle = Math.atan2(lateralVel, Math.abs(forwardVel) + 1);
   let latAccel = -corneringStiffnessAccel * slipAngle;
@@ -145,7 +190,8 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
   if (latAccel < -maxLateralAccel) latAccel = -maxLateralAccel;
 
   if (Math.abs(latAccel) >= maxLateralAccel) {
-    longAccel -= Math.abs(forwardVel) * (isDriftCar ? 0.35 : 1.5);
+    const slideLoss = isDrift ? 0.35 : isRally ? 0.45 : isMoto ? 1.2 : 1.5;
+    longAccel -= Math.abs(forwardVel) * slideLoss;
   }
 
   const globalAccelX = longAccel * cosA - latAccel * sinA;
@@ -189,7 +235,9 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
       wearRate += 0.1; // NÍVEL II: Relva
   }
   
-  if (car.vehicleType === 'DRIFT' && (Math.abs(lateralVel) > 24 || (car.throttle > 0.5 && Math.abs(car.steer) > 0.2))) { car.isSkidding = true; }
+  if (isDrift && (Math.abs(lateralVel) > 24 || (car.throttle > 0.5 && Math.abs(car.steer) > 0.2))) { car.isSkidding = true; }
+  else if (isRally && (Math.abs(lateralVel) > 28 || (surface === 'GRASS' && speed > 50))) { car.isSkidding = true; }
+  else if (isMoto && (Math.abs(lateralVel) > 40 || (car.throttle > 0.8 && speed < 100))) { car.isSkidding = true; }
   if (car.brake > 0.6) {
       wearRate += 0.15; // NÍVEL IV: Travagem a fundo
       car.isSkidding = true; 

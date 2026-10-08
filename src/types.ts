@@ -20,7 +20,7 @@ export interface PlayerConfig {
   socketId?: string;
   isReady?: boolean;
   helmetColor?: string;
-  vehicleType?: 'F1' | 'DRIFT';
+  vehicleType?: 'F1' | 'DRIFT' | 'MOTO' | 'RALLY';
 };
 
 export type GameState = 'menu' | 'playing' | 'gameover';

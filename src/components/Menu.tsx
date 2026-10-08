@@ -37,7 +37,7 @@ function MenuCarPreview({
      ctx.restore();
   }, [type, p, s, h]);
 
-  const isAvailable = type === 'F1' || type === 'DRIFT';
+  const isAvailable = true;
 
   return (
     <div 
@@ -54,16 +54,12 @@ function MenuCarPreview({
        
        <div className="flex items-center gap-1.5 mt-2">
            <span className={"text-[10px] sm:text-[11px] font-black uppercase tracking-wider " + (isSelected ? "text-yellow-400 font-black" : "text-gray-300")}>
-               {type === 'F1' ? 'F1 2026' : type === 'DRIFT' ? 'DRIFT SPEC' : type}
+               {type === 'F1' ? 'F1 2026' : type === 'DRIFT' ? 'DRIFT SPEC' : type === 'MOTO' ? 'MOTOGP' : 'RALLY 4WD'}
            </span>
-           {type === 'DRIFT' && !isSelected && (
-               <span className="text-[7px] font-black text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 border border-cyan-500/40 rounded tracking-widest uppercase">DISPONÍVEL</span>
-           )}
-           {isSelected && (
+           {isSelected ? (
                <span className="text-[7px] font-black text-black bg-yellow-400 px-1.5 py-0.5 rounded tracking-widest uppercase font-bold">EM USO</span>
-           )}
-           {type !== 'F1' && type !== 'DRIFT' && (
-               <span className="text-[7px] font-black text-gray-500 bg-black/95 px-1 py-0.5 border border-gray-700 rounded tracking-widest uppercase">Brevemente</span>
+           ) : (
+               <span className="text-[7px] font-black text-cyan-400 bg-cyan-950/80 px-1.5 py-0.5 border border-cyan-500/40 rounded tracking-widest uppercase font-bold">ATIVO</span>
            )}
        </div>
     </div>
@@ -537,7 +533,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
              <div className="w-full max-w-4xl bg-[#1a1a24] border border-gray-800 rounded-xl sm:rounded-2xl p-3.5 sm:p-6 flex flex-col md:flex-row gap-4 sm:gap-6 items-center justify-between shadow-2xl">
                 
                 <div className="w-full md:w-1/2 flex flex-col gap-6">
-                   <div className="flex items-center justify-between border-b-2 border-[#E10600] pb-2 mb-2"><h3 className="text-white font-black text-lg sm:text-xl uppercase tracking-wider">{players[0]?.vehicleType === 'DRIFT' ? 'Classe: Drift Spec (JDM)' : 'Classe: F1 2026'}</h3><span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-gray-300">{players[0]?.vehicleType === 'DRIFT' ? 'Power Slide RWD' : 'Downforce Máximo'}</span></div>
+                   <div className="flex items-center justify-between border-b-2 border-[#E10600] pb-2 mb-2"><h3 className="text-white font-black text-lg sm:text-xl uppercase tracking-wider">{players[0]?.vehicleType === 'DRIFT' ? 'Classe: Drift Spec (JDM)' : players[0]?.vehicleType === 'MOTO' ? 'Classe: MotoGP Superbike' : players[0]?.vehicleType === 'RALLY' ? 'Classe: Rally WRC (4WD)' : 'Classe: F1 2026'}</h3><span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-white/10 text-gray-300">{players[0]?.vehicleType === 'DRIFT' ? 'Power Slide RWD' : players[0]?.vehicleType === 'MOTO' ? 'Agilidade & Rocket Accel' : players[0]?.vehicleType === 'RALLY' ? 'All-Terrain AWD' : 'Downforce Máximo'}</span></div>
                    
                    <div>
                       <label className="block text-[10px] text-gray-400 uppercase tracking-widest mb-2 font-bold shadow-sm">Cor Primária (Carroçaria)</label>
@@ -569,7 +565,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                             p={players[0]?.color || "#E10600"} 
                             s={players[0]?.color2} 
                             h={players[0]?.helmetColor} 
-                            isSelected={players[0]?.vehicleType !== "DRIFT"} 
+                            isSelected={(players[0]?.vehicleType || "F1") === "F1"} 
                             onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: "F1" })} 
                          />
                          <MenuCarPreview 
@@ -580,12 +576,30 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
                             isSelected={players[0]?.vehicleType === "DRIFT"} 
                             onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: "DRIFT" })} 
                          />
-                         <MenuCarPreview type="MOTO" p={players[0]?.color || "#E10600"} s={players[0]?.color2} h={players[0]?.helmetColor} />
-                         <MenuCarPreview type="RALLY" p={players[0]?.color || "#E10600"} s={players[0]?.color2} h={players[0]?.helmetColor} />
+                         <MenuCarPreview 
+                            type="MOTO" 
+                            p={players[0]?.color || "#E10600"} 
+                            s={players[0]?.color2} 
+                            h={players[0]?.helmetColor} 
+                            isSelected={players[0]?.vehicleType === "MOTO"} 
+                            onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: "MOTO" })} 
+                         />
+                         <MenuCarPreview 
+                            type="RALLY" 
+                            p={players[0]?.color || "#E10600"} 
+                            s={players[0]?.color2} 
+                            h={players[0]?.helmetColor} 
+                            isSelected={players[0]?.vehicleType === "RALLY"} 
+                            onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: "RALLY" })} 
+                         />
                       </div>
                       <div className="text-center text-gray-400 font-bold tracking-widest uppercase text-[10px] mt-auto">
                          {players[0]?.vehicleType === "DRIFT" 
                             ? "🔥 MODO DRIFT ATIVO: Tração traseira solta, derrapagens controladas e fumo contínuo!" 
+                            : players[0]?.vehicleType === "MOTO"
+                            ? "🏍️ MODO MOTOGP ATIVO: Massa ultraleve (~220kg), aceleração 0-200 explosiva e inclinação em curva!"
+                            : players[0]?.vehicleType === "RALLY"
+                            ? "🌲 MODO RALLY ATIVO: Tração integral 4WD com imunidade a cortes de relva e curvas todo-o-terreno!"
                             : "🏎️ MODO F1 ATIVO: Monolugar de alta aderência aerodinâmica com DRS e velocidade máxima."}
                       </div>
                    </div>
@@ -829,7 +843,7 @@ export default function Menu({ players, playerCount, setPlayerCount, selectedTra
             {selectedTracks.length > 0 ? (activeTrackObj?.name || 'Pista Selecionada') : 'Nenhuma Pista'}
           </span>
           <span className="text-[10px] text-yellow-400 font-black uppercase tracking-widest">
-            {players[0]?.vehicleType === 'DRIFT' ? 'DRIFT SPEC' : 'F1 2026'}
+            {players[0]?.vehicleType === 'DRIFT' ? '🔥 DRIFT SPEC' : players[0]?.vehicleType === 'MOTO' ? '🏍️ MOTOGP' : players[0]?.vehicleType === 'RALLY' ? '🌲 RALLY 4WD' : '🏎️ F1 2026'}
           </span>
         </div>
         <button
