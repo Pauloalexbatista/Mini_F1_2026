@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { drawF1Car, drawMoto, drawDriftCar, drawRallyCar } from '../renderer';
 
-function ProfileCarPreview({ type, p, s, h }: { type: 'F1'|'MOTO'|'DRIFT'|'RALLY', p: string, s: string, h: string }) {
+function ProfileCarPreview({ type, p, s, h, isSelected, onSelect }: { type: 'F1'|'MOTO'|'DRIFT'|'RALLY', p: string, s: string, h: string, isSelected?: boolean, onSelect?: () => void }) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   useEffect(() => {
      const canvas = canvasRef.current;
@@ -18,16 +18,31 @@ function ProfileCarPreview({ type, p, s, h }: { type: 'F1'|'MOTO'|'DRIFT'|'RALLY
      else drawRallyCar(ctx, p, s);
      ctx.restore();
   }, [type, p, s, h]);
+  const isAvailable = type === 'F1' || type === 'DRIFT';
+
   return (
-    <div className="relative flex flex-col items-center">
+    <div 
+       onClick={() => isAvailable && onSelect && onSelect()}
+       className={"relative flex flex-col items-center p-2 rounded-xl border transition-all select-none " + (
+         isSelected 
+           ? "border-yellow-400 bg-yellow-400/10 shadow-[0_0_15px_rgba(250,204,21,0.3)] cursor-pointer" 
+           : isAvailable 
+             ? "border-gray-800 bg-black/40 hover:border-gray-600 cursor-pointer" 
+             : "border-gray-800/40 bg-black/20 opacity-35 cursor-not-allowed"
+       )}
+    >
        <canvas ref={canvasRef} width={140} height={80} className="w-[100px] sm:w-[130px] h-[60px] sm:h-[75px] block pointer-events-none" />
        
-       <div className="flex items-center gap-2 mt-2">
-           <span className={`text-[10px] font-bold uppercase tracking-widest ${type === 'F1' ? 'text-[#E10600]' : 'text-gray-400'}`}>
-               {type === 'F1' ? 'F1 2026' : type}
+       <div className="flex items-center gap-1.5 mt-1.5">
+           <span className={"text-[10px] font-bold uppercase tracking-wider " + (isSelected ? "text-yellow-400 font-black" : "text-gray-300")}>
+               {type === 'F1' ? 'F1 2026' : type === 'DRIFT' ? 'DRIFT' : type}
            </span>
-           {type !== 'F1' && (
-               <span className="text-[7px] font-black text-yellow-500 bg-black/95 px-1 py-0.5 border border-yellow-600 rounded tracking-widest uppercase">Brevemente</span>
+           {isSelected ? (
+               <span className="text-[7px] font-black text-black bg-yellow-400 px-1 py-0.5 rounded tracking-widest uppercase">EM USO</span>
+           ) : isAvailable ? (
+               <span className="text-[7px] font-black text-cyan-400 bg-cyan-950/80 px-1 py-0.5 border border-cyan-500/40 rounded tracking-widest uppercase">ATIVO</span>
+           ) : (
+               <span className="text-[7px] font-black text-gray-500 bg-black/95 px-1 py-0.5 border border-gray-700 rounded tracking-widest uppercase">Brevemente</span>
            )}
        </div>
     </div>
@@ -215,9 +230,9 @@ export function Profile({ user, setUser, players, onUpdatePlayer, onBack }: Prof
 
                 <div className="bg-black/40 rounded-xl py-4 w-full shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)] flex justify-center border border-gray-800">
                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 w-full px-2">
-                       <ProfileCarPreview type="F1" p={primaryColor} s={secondaryColor} h={helmetColor} />
+                       <ProfileCarPreview type="F1" p={primaryColor} s={secondaryColor} h={helmetColor} isSelected={(players[0]?.vehicleType || 'F1') === 'F1'} onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: 'F1' })} />
+                       <ProfileCarPreview type="DRIFT" p={primaryColor} s={secondaryColor} h={helmetColor} isSelected={players[0]?.vehicleType === 'DRIFT'} onSelect={() => onUpdatePlayer(0, { ...players[0], vehicleType: 'DRIFT' })} />
                        <ProfileCarPreview type="MOTO" p={primaryColor} s={secondaryColor} h={helmetColor} />
-                       <ProfileCarPreview type="DRIFT" p={primaryColor} s={secondaryColor} h={helmetColor} />
                        <ProfileCarPreview type="RALLY" p={primaryColor} s={secondaryColor} h={helmetColor} />
                    </div>
                 </div>
