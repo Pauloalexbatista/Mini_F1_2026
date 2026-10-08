@@ -236,7 +236,18 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
         if (accumulatedDistance >= targetDistance) { computedIndex = i; break; }
       }
       
-      const botSpeed = 160 + Math.floor(Math.random() * 21) * 10;
+      // Bot setup speed realistic bell-curve spread (average around human ~260 km/h)
+      let botSpeed = 260;
+      if (p.isBot) {
+        const diff = p.difficulty || 1.0;
+        if (diff >= 1.05) {
+          botSpeed = 270 + Math.floor(Math.random() * 3) * 10; // 270 - 290 km/h (Fast bots)
+        } else if (diff >= 0.96) {
+          botSpeed = 250 + Math.floor(Math.random() * 3) * 10; // 250 - 270 km/h (Human average)
+        } else {
+          botSpeed = 230 + Math.floor(Math.random() * 2) * 10; // 230 - 240 km/h (Slower bots)
+        }
+      }
       let finalSpeed = 260;
       if (!p.isBot && playerSetups[p.id]) finalSpeed = playerSetups[p.id];
       const assignedSetupProfile = getSetupFromSpeed(p.isBot ? botSpeed : finalSpeed);
@@ -249,6 +260,7 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
       const rotX = -offsetY * Math.sin(sAngle);
       const rotY = offsetY * Math.cos(sAngle);
 
+      const botDiff = p.difficulty || 1.0;
       return {
         id: p.id,
         x: (spawnNode.x || 0) + rotX,
@@ -260,10 +272,10 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
         throttle: 0,
         brake: 0,
         steer: 0,
-        maxSpeed: 800 + (p.isBot ? (p.difficulty || 0.8) * 100 : 200),
-        enginePower: 350 + (p.isBot ? (p.difficulty || 0.8) * 50 : 150),
-        brakingPower: 400,
-        grip: 1.0 + (p.isBot ? (p.difficulty || 0.8) * 0.1 : 0.2),
+        maxSpeed: 820 + (p.isBot ? (botDiff - 0.9) * 120 : 180),
+        enginePower: p.isBot ? Math.round(470 + (botDiff - 1.0) * 100) : 500,
+        brakingPower: 420,
+        grip: 1.0 + (p.isBot ? (botDiff - 0.9) * 0.15 : 0.2),
         mass: 800,
         color: p.color,
         color2: p.color2,
@@ -405,17 +417,31 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           if (!isFinished) {
               let minSplineDistSq = Infinity;
               let resolveX = car.x; let resolveY = car.y;
-              let searchRange = spline.length; if (car.currentWaypoint > 0) searchRange = 400; 
-    
-              for (let s = 0; s <= searchRange * 2; s++) {
-                 let i = (car.currentWaypoint - searchRange + s + spline.length) % spline.length;
-                 if (searchRange === spline.length && s >= spline.length) break;
+              // Safe local corridor search: strictly prevents jumping across grass to adjacent straights
+              const backRange = Math.max(15, Math.floor(spline.length * 0.05));
+              const forwardRange = Math.max(30, Math.floor(spline.length * 0.10));
+              const localSteps = backRange + forwardRange;
+
+              for (let s = 0; s <= localSteps; s++) {
+                 let i = (car.currentWaypoint - backRange + s + spline.length) % spline.length;
                  let nextI = (i + 1) % spline.length; const p1 = spline[i]; const p2 = spline[nextI];
                  const l2 = (p1.x - p2.x)**2 + (p1.y - p2.y)**2;
                  let t_seg = 0; if (l2 > 0) { t_seg = ((car.x - p1.x) * (p2.x - p1.x) + (car.y - p1.y) * (p2.y - p1.y)) / l2; t_seg = Math.max(0, Math.min(1, t_seg)); }
                  const projX = p1.x + t_seg * (p2.x - p1.x); const projY = p1.y + t_seg * (p2.y - p1.y);
                  const distSq = (car.x - projX)**2 + (car.y - projY)**2;
                  if (distSq < minSplineDistSq) { minSplineDistSq = distSq; closestIndex = t_seg < 0.5 ? i : nextI; resolveX = projX; resolveY = projY; }
+              }
+
+              // Failsafe: if car spins wildly off track (> 600px away), search full spline
+              if (minSplineDistSq > 360000) {
+                 for (let i = 0; i < spline.length; i++) {
+                     let nextI = (i + 1) % spline.length; const p1 = spline[i]; const p2 = spline[nextI];
+                     const l2 = (p1.x - p2.x)**2 + (p1.y - p2.y)**2;
+                     let t_seg = 0; if (l2 > 0) { t_seg = ((car.x - p1.x) * (p2.x - p1.x) + (car.y - p1.y) * (p2.y - p1.y)) / l2; t_seg = Math.max(0, Math.min(1, t_seg)); }
+                     const projX = p1.x + t_seg * (p2.x - p1.x); const projY = p1.y + t_seg * (p2.y - p1.y);
+                     const distSq = (car.x - projX)**2 + (car.y - projY)**2;
+                     if (distSq < minSplineDistSq) { minSplineDistSq = distSq; closestIndex = t_seg < 0.5 ? i : nextI; resolveX = projX; resolveY = projY; }
+                 }
               }
           
           const closestNode = spline[closestIndex] || { width: 300 };
@@ -462,10 +488,16 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
               if (isInPitLane && pitSpline) { tArr = pitSpline; useL = false; let mD = Infinity; for (let i=0; i<pitSpline.length; i++) { const dSq = (car.x-pitSpline[i].x)**2 + (car.y-pitSpline[i].y)**2; if (dSq < mD) { mD=dSq; myIdx=i; } } }
               const tIdx = useL ? (myIdx + lookA) % tArr.length : Math.min(myIdx + lookA, tArr.length - 1);
               const rawT = tArr[tIdx] || { x: 0, y: 0 };
-              const tAngle = Math.atan2(rawT.y - car.y, rawT.x - car.x); let aD = Math.atan2(Math.sin(tAngle-car.angle), Math.cos(tAngle-car.angle));
-              car.steer = Math.max(-1, Math.min(1, aD * Math.max(1.5, 4.0 - (speed_val/120))));
-              const sSpd = (surface==='GRASS') ? car.maxSpeed*0.3 : car.maxSpeed * Math.max(0.2, 1.0 - (Math.max(0, Math.abs(aD)-0.05)*3.5));
-              if (speed_val < sSpd - 5) car.throttle = 1.0; else if (speed_val > sSpd + 15) car.brake = Math.min(1, (speed_val-sSpd)/100);
+              const tAngle = Math.atan2(rawT.y - car.y, rawT.x - car.x); 
+              let aD = Math.atan2(Math.sin(tAngle-car.angle), Math.cos(tAngle-car.angle));
+              car.steer = Math.max(-1, Math.min(1, aD * Math.max(1.8, 3.8 - (speed_val/150))));
+              
+              // Dynamic cornering speed: maintain momentum in curves instead of panic braking
+              const anglePenalty = Math.max(0, Math.abs(aD) - 0.08);
+              const cornerFactor = Math.max(0.40, 1.0 - (anglePenalty * 1.8));
+              const sSpd = (surface==='GRASS') ? car.maxSpeed * 0.35 : car.maxSpeed * cornerFactor;
+              if (speed_val < sSpd - 5) car.throttle = 1.0; 
+              else if (speed_val > sSpd + 20) car.brake = Math.min(0.85, (speed_val - sSpd) / 80);
             } else if (car.remoteTarget) {
               // Dead reckoning for remote bots on client
               car.remoteTarget.x += car.vx * dt;
@@ -515,22 +547,46 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
           if (!isFinished && (car.isLocal || (car.isBot && isHost))) {
               const skidMinSpd = (car.vehicleType === 'DRIFT' || car.vehicleType === 'RALLY') ? 35 : car.vehicleType === 'MOTO' ? 50 : 100; const skidW = car.vehicleType === 'MOTO' ? 9 : car.vehicleType === 'DRIFT' ? 25 : car.vehicleType === 'RALLY' ? 24 : 22;
               if (speed_val_final > skidMinSpd && car.isSkidding) { skidMarksRef.current.push({ x: car.x, y: car.y, a: car.angle, w: skidW }); if (skidMarksRef.current.length > 3000) skidMarksRef.current.shift(); }
-              if (closestIndex > car.currentWaypoint && closestIndex < car.currentWaypoint + 400) car.currentWaypoint = closestIndex;
-              if ((closestIndex < spline.length * 0.1 || closestIndex < 30) && car.currentWaypoint > spline.length * 0.7) {
-                 car.laps++; car.currentWaypoint = 0;
-                 if (car.laps > 0 && car.currentLapStartTime) {
-                    const lapT = now - car.currentLapStartTime; car.lastLapTime = lapT; if (!car.bestLapTime || lapT < car.bestLapTime) car.bestLapTime = lapT;
-                    if (lapT < globalBestLapRef.current) { globalBestLapRef.current = lapT; const pD = players.find(p => String(p.id) === String(car.id)); setFastLapPopup({ name: pD?.driverName || (car.isBot ? 'BOT' : 'P'+car.id), time: formatTime(lapT), color: car.color, isInitial: false }); setTimeout(() => setFastLapPopup(null), 4000); }
-                 }
-                 car.currentLapStartTime = now;
-                 if (car.laps >= Number(totalLaps) && Number(totalLaps) > 0 && car.finishTime === null) { 
-                    car.finishTime = now - startTimeRef.current; 
-                    if (!car.isBot && !car.scorePosted) { 
-                        car.scorePosted = true; 
-                        if (car.bestLapTime) submitLapTime(car.bestLapTime); 
-                        else submitLapTime(car.finishTime / totalLaps);
-                    } 
-                 }
+              // Continuous Lap & Waypoint Progression Engine (prevents lapped cars from dropping in standings)
+              const forwardDelta = (closestIndex - car.currentWaypoint + spline.length) % spline.length;
+              const backwardDelta = (car.currentWaypoint - closestIndex + spline.length) % spline.length;
+              const maxForwardJump = Math.max(30, Math.floor(spline.length * 0.15));
+
+              if (forwardDelta > 0 && forwardDelta <= maxForwardJump) {
+                  // Finish line crossing check: transition from sector 3 (> 70%) to sector 1 (< 30%)
+                  if (car.currentWaypoint > spline.length * 0.70 && closestIndex < spline.length * 0.30) {
+                      car.laps++;
+                      car.currentWaypoint = closestIndex;
+                      if (car.laps > 0 && car.currentLapStartTime) {
+                          const lapT = now - car.currentLapStartTime; 
+                          car.lastLapTime = lapT; 
+                          if (!car.bestLapTime || lapT < car.bestLapTime) car.bestLapTime = lapT;
+                          if (lapT < globalBestLapRef.current) { 
+                              globalBestLapRef.current = lapT; 
+                              const pD = players.find(p => String(p.id) === String(car.id)); 
+                              setFastLapPopup({ 
+                                  name: pD?.driverName || (car.isBot ? 'BOT' : 'P'+car.id), 
+                                  time: formatTime(lapT), 
+                                  color: car.color, 
+                                  isInitial: false 
+                              }); 
+                              setTimeout(() => setFastLapPopup(null), 4000); 
+                          }
+                      }
+                      car.currentLapStartTime = now;
+                      if (car.laps >= Number(totalLaps) && Number(totalLaps) > 0 && car.finishTime === null) { 
+                          car.finishTime = now - startTimeRef.current; 
+                          if (!car.isBot && !car.scorePosted) { 
+                              car.scorePosted = true; 
+                              if (car.bestLapTime) submitLapTime(car.bestLapTime); 
+                              else submitLapTime(car.finishTime / totalLaps);
+                          } 
+                      }
+                  } else {
+                      car.currentWaypoint = closestIndex;
+                  }
+              } else if (backwardDelta <= 8) {
+                  car.currentWaypoint = closestIndex;
               }
           }
         });
@@ -570,8 +626,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
                   if (a.finishTime !== null && b.finishTime !== null) return a.finishTime - b.finishTime;
                   if (a.finishTime !== null) return -1;
                   if (b.finishTime !== null) return 1;
-                  const scoreA = (a.laps * 1000000) + a.currentWaypoint;
-                  const scoreB = (b.laps * 1000000) + b.currentWaypoint;
+                  const scoreA = (a.laps * spline.length) + a.currentWaypoint;
+                  const scoreB = (b.laps * spline.length) + b.currentWaypoint;
                   return scoreB - scoreA;
               });
               const standingsData = sorted.map(c => ({
@@ -1018,8 +1074,8 @@ export default function Game({ players, track, totalLaps, onBackToMenu, champion
                  if (a.finishTime !== null && b.finishTime !== null) return a.finishTime - b.finishTime;
                  if (a.finishTime !== null) return -1;
                  if (b.finishTime !== null) return 1;
-                 const scoreA = (a.laps * 1000000) + a.currentWaypoint;
-                 const scoreB = (b.laps * 1000000) + b.currentWaypoint;
+                 const scoreA = (a.laps * spline.length) + a.currentWaypoint;
+                 const scoreB = (b.laps * spline.length) + b.currentWaypoint;
                  return scoreB - scoreA;
             });
             currentRes = sorted.map((c, i) => {

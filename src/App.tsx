@@ -402,7 +402,8 @@ export default function App() {
                  color: `hsl(${hue1}, 85%, 45%)`,
                  color2: `hsl(${hue2}, 80%, 30%)`,
                  helmetColor: `hsl(${hueHelmet}, 90%, 55%)`,
-                 difficulty: 0.90,
+                 // Tiered AI: Top bots fast, mid bots equal human average, back bots slightly slower
+                 difficulty: i < 2 ? 1.08 + (i === 0 ? 0.04 : 0.01) : (i < 6 ? 0.98 + (i % 3) * 0.02 : 0.91 + (i % 3) * 0.02),
                  socketId: `bot_${i}`,
                  isReady: true 
               });

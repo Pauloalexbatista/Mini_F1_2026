@@ -204,7 +204,10 @@ export function updateCarPhysics(car: CarPhysics, dt: number, surface: SurfaceTy
   car.y += car.vy * dt;
   
   const newSpeed = Math.sqrt(car.vx*car.vx + car.vy*car.vy);
-  const baseMaxSpeed = car.setupProfile ? (car.setupProfile.maxSpeedKmh / 0.36) : car.maxSpeed;
+  // Balance of Performance (BoP): Realistic Top Speeds per Vehicle Type
+  const vehicleMaxKmh = isMoto ? 335 : isDrift ? 315 : isRally ? 295 : 360;
+  const targetKmh = car.setupProfile ? Math.min(car.setupProfile.maxSpeedKmh, vehicleMaxKmh) : (car.maxSpeed ? Math.min(car.maxSpeed * 0.36, vehicleMaxKmh) : vehicleMaxKmh);
+  const baseMaxSpeed = targetKmh / 0.36;
   const currentMaxSpeed = (baseMaxSpeed * maxSpeedMod) * damagePenalty;
   
   if (newSpeed > currentMaxSpeed) {
